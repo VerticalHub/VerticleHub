@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import {
@@ -29,8 +29,53 @@ export default function FAQSection() {
     {
       question: "How quickly will I receive quotes?",
       answer: "After submitting your information, you'll typically receive initial quotes and options within 24 hours. A licensed agent will also contact you to discuss your options in more detail and answer any questions you may have about the coverage options."
+    },
+    {
+      question: "Am I eligible for ACA subsidies?",
+      answer: "Eligibility for ACA subsidies depends on your income, household size, and the cost of plans in your area. Most individuals and families with income between 100% and 400% of the federal poverty level qualify for some level of premium tax credits. We'll help determine your potential eligibility during the quote process."
+    },
+    {
+      question: "When can I enroll in health insurance?",
+      answer: "You can enroll during the annual Open Enrollment Period (typically November to January) or if you qualify for a Special Enrollment Period (SEP) due to certain life events like losing coverage, moving, getting married, having a baby, or adopting a child. Medicare has its own separate enrollment periods."
     }
   ];
+
+  // Add FAQ structured data to the page for SEO
+  useEffect(() => {
+    // Create the FAQPage structured data
+    const faqStructuredData = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": faqs.map(faq => ({
+        "@type": "Question",
+        "name": faq.question,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": faq.answer
+        }
+      }))
+    };
+
+    // Add the structured data to the head
+    const existingScript = document.getElementById("faq-structured-data");
+    if (existingScript) {
+      existingScript.innerHTML = JSON.stringify(faqStructuredData);
+    } else {
+      const script = document.createElement("script");
+      script.id = "faq-structured-data";
+      script.type = "application/ld+json";
+      script.innerHTML = JSON.stringify(faqStructuredData);
+      document.head.appendChild(script);
+    }
+
+    // Cleanup on component unmount
+    return () => {
+      const script = document.getElementById("faq-structured-data");
+      if (script) {
+        script.remove();
+      }
+    };
+  }, [faqs]);
 
   return (
     <section id="faq" className="py-16 bg-white">

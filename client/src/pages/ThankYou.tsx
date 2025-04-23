@@ -10,8 +10,24 @@ export default function ThankYou() {
   return (
     <>
       <Helmet>
-        <title>Thank You | HealthCare Connect</title>
+        <title>Thank You | Your Health Insurance Quote Request Has Been Received</title>
+        <meta name="description" content="Thank you for submitting your information. A healthcare specialist will contact you within 24 hours to discuss your personalized insurance options." />
         <meta name="robots" content="noindex, nofollow" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://healthcareconnect.com/thank-you" />
+        <meta property="og:title" content="Thank You | Your Health Insurance Quote Request Has Been Received" />
+        <meta property="og:description" content="Thank you for submitting your information. A healthcare specialist will contact you within 24 hours to discuss your personalized insurance options." />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:url" content="https://healthcareconnect.com/thank-you" />
+        <meta name="twitter:title" content="Thank You | Your Health Insurance Quote Request Has Been Received" />
+        <meta name="twitter:description" content="Thank you for submitting your information. A healthcare specialist will contact you within 24 hours to discuss your personalized insurance options." />
+        
+        {/* Canonical Link */}
+        <link rel="canonical" href="https://healthcareconnect.com/thank-you" />
       </Helmet>
 
       <Header />

@@ -26,14 +26,32 @@ export default function Home() {
   return (
     <>
       <Helmet>
-        <title>HealthCare Connect | Find Affordable Insurance Coverage Options</title>
-        <meta name="description" content="Find affordable healthcare coverage options including ACA/Obamacare, Medicare, and Final Expense/Life Insurance. Get personalized quotes from trusted providers." />
-        <meta name="og:title" content="HealthCare Connect | Find Affordable Insurance Coverage Options" />
-        <meta name="og:description" content="Find personalized healthcare coverage options. Compare quotes for Obamacare, Medicare, and Final Expense insurance." />
-        <meta name="og:type" content="website" />
+        <title>Health Insurance Quotes | Compare ACA, Medicare & Life Insurance Plans</title>
+        <meta name="description" content="Check if you qualify for premium subsidies and tax credits on ACA health insurance plans. Compare options for Medicare, Affordable Care Act, and Final Expense insurance." />
+        <meta name="keywords" content="health insurance quotes, obamacare plans, medicare insurance, affordable care act, final expense insurance, healthcare subsidies, tax credits, special enrollment period" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://healthcareconnect.com/" />
+        <meta property="og:title" content="Health Insurance Quotes | Compare ACA, Medicare & Life Insurance Plans" />
+        <meta property="og:description" content="Check if you qualify for premium subsidies and tax credits on ACA health insurance plans. Compare options for Medicare, Affordable Care Act, and Final Expense insurance." />
+        <meta property="og:image" content="https://images.unsplash.com/photo-1576091160550-2173dba999ef" />
+        
+        {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="HealthCare Connect | Affordable Healthcare Options" />
-        <meta name="twitter:description" content="Find personalized healthcare coverage options from trusted providers." />
+        <meta name="twitter:url" content="https://healthcareconnect.com/" />
+        <meta name="twitter:title" content="Health Insurance Quotes | Compare ACA, Medicare & Life Insurance Plans" />
+        <meta name="twitter:description" content="Check if you qualify for premium subsidies and tax credits on ACA health insurance plans. Compare options for Medicare, Affordable Care Act, and Final Expense insurance." />
+        <meta name="twitter:image" content="https://images.unsplash.com/photo-1576091160550-2173dba999ef" />
+        
+        {/* Canonical Link */}
+        <link rel="canonical" href="https://healthcareconnect.com/" />
+        
+        {/* Additional SEO metadata */}
+        <meta name="robots" content="index, follow" />
+        <meta name="author" content="HealthCare Connect" />
+        <meta name="geo.region" content="US" />
+        <meta name="geo.placename" content="United States" />
       </Helmet>
 
       <Header />
