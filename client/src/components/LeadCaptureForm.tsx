@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
@@ -9,6 +9,8 @@ import { useStates } from "@/hooks/use-states";
 import { leadValidationSchema, LeadFormData } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -89,19 +91,49 @@ export default function LeadCaptureForm() {
     leadMutation.mutate(data);
   };
 
-  const handleInterestChange = (interest: string, checked: boolean) => {
-    setSelectedInterests(prev => 
-      checked 
-        ? [...prev, interest]
-        : prev.filter(i => i !== interest)
-    );
+  // Watch for Medicare interest and date of birth to show warnings
+  useEffect(() => {
+    // Check if user wants Medicare but is not old enough
+    const dateOfBirth = form.getValues("dateOfBirth") as string;
+    if (selectedInterests.includes("Medicare") && dateOfBirth) {
+      const dob = new Date(dateOfBirth);
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const monthDiff = today.getMonth() - dob.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+      }
+      
+      // Check if they're at least 64.5 years old
+      if (age < 64 || (age === 64 && monthDiff < 6)) {
+        setShowMedicareWarning(true);
+      } else {
+        setShowMedicareWarning(false);
+      }
+    } else {
+      setShowMedicareWarning(false);
+    }
     
-    // Update the form value
-    const updatedInterests = checked 
+    // Check if user wants ACA but has Medicare/Medicaid/VA
+    const hasCoverage = form.getValues("hasMedicaidMedicareVA");
+    if (selectedInterests.includes("ACA/Obamacare") && hasCoverage) {
+      setShowAcaWarning(true);
+    } else {
+      setShowAcaWarning(false);
+    }
+  }, [selectedInterests, form.watch("dateOfBirth"), form.watch("hasMedicaidMedicareVA"), form]);
+
+  const handleInterestChange = (interest: string, checked: boolean) => {
+    const newInterests = checked 
       ? [...selectedInterests, interest]
       : selectedInterests.filter(i => i !== interest);
     
-    form.setValue('interests', updatedInterests);
+    setSelectedInterests(newInterests);
+    form.setValue('interests', newInterests);
+    
+    // Force re-validation
+    form.trigger('interests');
   };
 
   return (
@@ -350,6 +382,26 @@ export default function LeadCaptureForm() {
                     <p className="text-sm font-medium text-destructive mt-2">
                       Select at least one interest
                     </p>
+                  )}
+                  
+                  {showAcaWarning && (
+                    <Alert variant="destructive" className="mt-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Eligibility Warning</AlertTitle>
+                      <AlertDescription>
+                        ACA/Obamacare plans are not available for people with existing Medicare, Medicaid, or VA coverage.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  
+                  {showMedicareWarning && (
+                    <Alert variant="destructive" className="mt-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Eligibility Warning</AlertTitle>
+                      <AlertDescription>
+                        Medicare is only available to people who are at least 64½ years old. Based on your date of birth, you may not be eligible yet.
+                      </AlertDescription>
+                    </Alert>
                   )}
                 </div>
               </FormItem>
