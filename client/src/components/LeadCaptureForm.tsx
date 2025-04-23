@@ -433,13 +433,24 @@ export default function LeadCaptureForm() {
                 Processing...
               </>
             ) : (
-              "Get My Free Quotes Now"
+              "Check My Eligibility For Health Insurance"
             )}
           </Button>
           
-          <p className="text-xs text-gray-500 mt-4 text-center">
-            HIPAA Compliant • 256-bit Encryption • We never sell your personal data
-          </p>
+          <div className="mt-4 text-xs text-gray-600 space-y-2">
+            <p className="text-center">
+              HIPAA Compliant • 256-bit Encryption • We never sell your personal data
+            </p>
+            <p className="text-center">
+              Note: Eligibility for health insurance plans depends on various factors. You may qualify for 
+              reduced premiums through subsidies or tax credits if eligible. There is no guarantee 
+              of coverage until your application is processed.
+            </p>
+            <p className="text-center">
+              If you currently have Medicare, Medicaid, TriCare or Employer coverage, 
+              you may not qualify for ACA/Obamacare plans.
+            </p>
+          </div>
         </form>
       </Form>
     </Card>

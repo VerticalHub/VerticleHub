@@ -11,17 +11,17 @@ export default function HeroSection() {
           transition={{ duration: 0.5 }}
         >
           <h1 className="font-heading text-4xl md:text-5xl font-bold mb-4 leading-tight">
-            Find Affordable Healthcare Coverage That Works For You
+            See If You Qualify For Affordable Health Insurance
           </h1>
           <p className="text-xl mb-8 text-blue-100">
-            Compare personalized quotes for Obamacare, Medicare, and Final Expense/Life Insurance from trusted providers.
+            You may be eligible for premium subsidies and tax credits on ACA health insurance plans. Compare options for Affordable Care Act, Medicare, and Final Expense/Life Insurance.
           </p>
           <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
             <a 
               href="#get-quotes" 
               className="bg-white text-primary-700 hover:bg-gray-100 font-medium px-6 py-3 rounded-md text-center shadow-lg transition transform hover:-translate-y-1"
             >
-              Get Your Free Quotes
+              Check Your Eligibility
             </a>
             <a 
               href="#options" 

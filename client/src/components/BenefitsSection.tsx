@@ -2,21 +2,23 @@ import { Search, Users, FileSpreadsheet } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function BenefitsSection() {
+  // Get the current year for enrollment period information
+  const currentYear = new Date().getFullYear();
   const benefits = [
     {
       icon: <Search className="w-10 h-10" />,
-      title: "Compare Multiple Options",
-      description: "Get personalized quotes from leading providers to find the best coverage at the right price."
+      title: "Premium Subsidies & Tax Credits",
+      description: "You may qualify for government subsidies that can significantly reduce your monthly premium payments for ACA health insurance plans."
     },
     {
       icon: <Users className="w-10 h-10" />,
-      title: "Experienced Guidance",
-      description: "Our licensed agents help you navigate complex coverage options to find what works for you."
+      title: "Personalized Coverage Options",
+      description: "Find health insurance plans that fit your specific needs and budget with options for individuals and families without employer coverage."
     },
     {
       icon: <FileSpreadsheet className="w-10 h-10" />,
-      title: "Simple Enrollment",
-      description: "We streamline the application process so you can get covered quickly and easily."
+      title: "Enrollment Period Assistance",
+      description: `Navigate Open Enrollment or Special Enrollment Periods with expert guidance. Certain life events may qualify you for special enrollment outside standard periods.`
     }
   ];
 
@@ -62,6 +64,36 @@ export default function BenefitsSection() {
             </motion.div>
           ))}
         </div>
+        
+        {/* Enrollment Period Information */}
+        <motion.div 
+          className="mt-16 bg-white p-8 rounded-lg shadow-md border-l-4 border-primary-600"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+        >
+          <h3 className="font-heading text-2xl font-semibold mb-4">Enrollment Period Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-lg font-medium mb-2">Open Enrollment Period</h4>
+              <p className="text-gray-700">
+                The annual Open Enrollment Period for ACA/Obamacare plans typically runs from November 1 to January 15. 
+                During this time, anyone can enroll in a health insurance plan without requiring a qualifying life event.
+              </p>
+            </div>
+            <div>
+              <h4 className="text-lg font-medium mb-2">Special Enrollment Period</h4>
+              <p className="text-gray-700">
+                If you've experienced qualifying life events such as losing health coverage, moving, getting married, 
+                having a baby, or adopting a child, you may be eligible to enroll during a Special Enrollment Period.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 text-sm text-gray-600">
+            <p>Important: Eligibility for insurance plans depends on various factors including income, household size, and existing coverage. There is no guaranteed eligibility or qualification. Our agents can help determine if you qualify.</p>
+          </div>
+        </motion.div>
       </div>
     </section>
   );

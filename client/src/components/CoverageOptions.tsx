@@ -8,12 +8,12 @@ export default function CoverageOptions() {
       image: "https://images.unsplash.com/photo-1497124401559-3e75ec2ed794?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80",
       imageAlt: "Family discussing healthcare options",
       benefits: [
-        "Coverage for essential health benefits",
-        "Potential premium subsidies based on income",
-        "No denial for pre-existing conditions",
-        "Various coverage levels to choose from"
+        "May qualify for premium subsidies",
+        "Tax credits available for eligible applicants",
+        "Plans cover essential health benefits",
+        "Options for various income levels"
       ],
-      ctaText: "Get ACA/Obamacare Quotes"
+      ctaText: "Check Eligibility for ACA Plans"
     },
     {
       title: "Medicare Plans",
