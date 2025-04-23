@@ -1,4 +1,6 @@
-import { users, type User, type InsertUser, Lead, InsertLead } from "@shared/schema";
+import { users, leads, type User, type InsertUser, type Lead, type InsertLead } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 // Expanded storage interface with lead management
 export interface IStorage {
@@ -10,51 +12,44 @@ export interface IStorage {
   getLeadById(id: number): Promise<Lead | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private leads: Map<number, Lead>;
-  private userCurrentId: number;
-  private leadCurrentId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.leads = new Map();
-    this.userCurrentId = 1;
-    this.leadCurrentId = 1;
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userCurrentId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     return user;
   }
 
   async createLead(insertLead: InsertLead): Promise<Lead> {
-    const id = this.leadCurrentId++;
-    const createdAt = new Date();
-    const lead: Lead = { ...insertLead, id, createdAt };
-    this.leads.set(id, lead);
+    const [lead] = await db
+      .insert(leads)
+      .values({
+        ...insertLead,
+        createdAt: new Date()
+      })
+      .returning();
     return lead;
   }
 
   async getAllLeads(): Promise<Lead[]> {
-    return Array.from(this.leads.values());
+    return await db.select().from(leads).orderBy(desc(leads.createdAt));
   }
 
   async getLeadById(id: number): Promise<Lead | undefined> {
-    return this.leads.get(id);
+    const [lead] = await db.select().from(leads).where(eq(leads.id, id));
+    return lead || undefined;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
