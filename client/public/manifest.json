@@ -1,0 +1,16 @@
+{
+  "name": "HealthCare Connect - Insurance Quotes",
+  "short_name": "HealthCare Connect",
+  "description": "Compare health insurance options including ACA, Medicare, and Final Expense insurance plans. Check eligibility for subsidies and tax credits.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
