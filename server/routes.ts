@@ -19,6 +19,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phoneNumber: formData.phoneNumber,
         zipCode: formData.zipCode,
         state: formData.state,
+        dateOfBirth: formData.dateOfBirth,
+        hasMedicaidMedicareVA: formData.hasMedicaidMedicareVA,
         interestedInACA: formData.interests.includes("ACA/Obamacare"),
         interestedInMedicare: formData.interests.includes("Medicare"),
         interestedInFinalExpense: formData.interests.includes("Final Expense/Life Insurance"),

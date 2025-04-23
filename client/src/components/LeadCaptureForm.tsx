@@ -16,6 +16,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,13 +27,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export default function LeadCaptureForm() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const stateOptions = useStates();
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [showAcaWarning, setShowAcaWarning] = useState(false);
+  const [showMedicareWarning, setShowMedicareWarning] = useState(false);
   
   const form = useForm<LeadFormData>({
     resolver: zodResolver(leadValidationSchema),
@@ -43,6 +49,8 @@ export default function LeadCaptureForm() {
       phoneNumber: "",
       zipCode: "",
       state: "",
+      dateOfBirth: "",
+      hasMedicaidMedicareVA: false,
       interests: [],
     },
   });
@@ -212,6 +220,70 @@ export default function LeadCaptureForm() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="dateOfBirth"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Date of Birth</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant={"outline"}
+                          className={`w-full pl-3 text-left font-normal ${!field.value ? "text-muted-foreground" : ""}`}
+                        >
+                          {field.value ? (
+                            format(new Date(field.value), "PPP")
+                          ) : (
+                            <span>Select your date of birth</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value ? new Date(field.value) : undefined}
+                        onSelect={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
+                        disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormDescription>
+                    Required for Medicare eligibility verification
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="hasMedicaidMedicareVA"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>
+                      I currently have Medicare, Medicaid, or VA coverage
+                    </FormLabel>
+                    <FormDescription>
+                      This helps us determine your eligibility for certain plans
+                    </FormDescription>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
