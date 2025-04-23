@@ -20,24 +20,24 @@ export default function CoverageOptions() {
       image: "https://images.unsplash.com/photo-1521790797524-b2497295b8a0?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80",
       imageAlt: "Senior couple consulting with healthcare advisor",
       benefits: [
-        "Original Medicare (Parts A & B) options",
-        "Medicare Advantage plans (Part C)",
-        "Prescription drug coverage (Part D)",
-        "Medicare Supplement (Medigap) plans"
+        "Medicare options for eligible individuals",
+        "Medicare Advantage plans for those who qualify",
+        "Part D plans for qualifying participants",
+        "Supplement plans for eligible Medicare enrollees"
       ],
-      ctaText: "Get Medicare Quotes"
+      ctaText: "Check Medicare Eligibility"
     },
     {
       title: "Final Expense/Life Insurance",
       image: "https://images.unsplash.com/photo-1556745753-b2904692b3cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80",
       imageAlt: "Family planning for the future",
       benefits: [
-        "Coverage for funeral and burial expenses",
-        "Simplified issue policies available",
-        "Affordable monthly premiums",
-        "Peace of mind for you and your family"
+        "Policies for those who may qualify",
+        "Various premium options available",
+        "Plans with different coverage amounts",
+        "Options for different health situations"
       ],
-      ctaText: "Get Final Expense Quotes"
+      ctaText: "Explore Final Expense Options"
     }
   ];
 
@@ -61,7 +61,7 @@ export default function CoverageOptions() {
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            Find the right health insurance coverage for your situation, whether you're looking for Obamacare, Medicare, or Final Expense options.
+            Check if you may qualify for health insurance coverage options, including ACA plans with potential premium subsidies and tax credits, Medicare for eligible individuals, and Final Expense options.
           </motion.p>
         </div>
         
