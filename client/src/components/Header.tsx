@@ -27,7 +27,7 @@ export default function Header() {
         </div>
         
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex space-x-8">
+        <nav className="hidden md:flex space-x-8 items-center">
           <a 
             href="#benefits" 
             className="text-gray-700 hover:text-primary-600 font-medium transition"
@@ -56,6 +56,22 @@ export default function Header() {
           >
             FAQs
           </a>
+          <Link href="/marketplace">
+            <Button 
+              variant="outline" 
+              className="border-primary-600 text-primary-600 hover:bg-primary-600 hover:text-white"
+            >
+              Marketplace
+            </Button>
+          </Link>
+          <Link href="/admin">
+            <Button 
+              variant="outline" 
+              className="border-gray-600 text-gray-600 hover:bg-gray-600 hover:text-white"
+            >
+              Admin
+            </Button>
+          </Link>
         </nav>
         
         {/* Mobile Navigation Button */}

@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/Home";
 import ThankYou from "@/pages/ThankYou";
+import Marketplace from "@/pages/Marketplace";
+import Admin from "@/pages/Admin";
 import NotFound from "@/pages/not-found";
 import { Helmet } from "react-helmet";
 
@@ -13,6 +15,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Home}/>
       <Route path="/thank-you" component={ThankYou}/>
+      <Route path="/marketplace" component={Marketplace}/>
+      <Route path="/admin" component={Admin}/>
       <Route component={NotFound} />
     </Switch>
   );
