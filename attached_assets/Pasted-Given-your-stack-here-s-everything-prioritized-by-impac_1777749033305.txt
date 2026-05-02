@@ -1,0 +1,270 @@
+Given your stack, here's everything prioritized by impact and implementation order:
+
+🔐 1. Auth First (Blocker for Everything Else)
+Use better-auth — it's the best fit for your Drizzle + PostgreSQL setup.
+bashnpm install better-auth
+Schema additions to shared/schema.ts:
+typescriptexport const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  role: text("role").default("agent"), // agent | manager | admin
+  passwordHash: text("password_hash"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+Express middleware:
+typescript// server/middleware/auth.ts
+export const requireAuth = async (req, res, next) => {
+  const session = await validateSession(req.cookies.session_token);
+  if (!session) return res.status(401).json({ error: "Unauthorized" });
+  req.user = session.user;
+  next();
+};
+
+export const requireRole = (roles: string[]) => (req, res, next) => {
+  if (!roles.includes(req.user.role)) 
+    return res.status(403).json({ error: "Forbidden" });
+  next();
+};
+Apply to routes:
+typescriptapp.get("/api/leads", requireAuth, getLeads);
+app.get("/api/admin/*", requireAuth, requireRole(["admin", "manager"]), adminRoutes);
+
+📋 2. CRM Activity Layer
+Schema:
+typescriptexport const leadActivities = pgTable("lead_activities", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").references(() => leads.id),
+  userId: text("user_id").references(() => users.id),
+  type: text("type").notNull(), // call | email | note | disposition
+  disposition: text("disposition"), // contacted | voicemail | not_interested | converted | callback
+  notes: text("notes"),
+  followUpAt: timestamp("follow_up_at"),
+  duration: integer("duration"), // seconds, for calls
+  createdAt: timestamp("created_at").defaultNow(),
+});
+Routes:
+typescript// POST /api/leads/:id/activities
+// GET  /api/leads/:id/activities
+// GET  /api/activities/follow-ups?userId=x  ← today's callbacks
+UI — add to your expandable lead row:
+typescript// Activity timeline component
+const ActivityFeed = ({ leadId }) => {
+  const { data } = useQuery({
+    queryKey: ["activities", leadId],
+    queryFn: () => fetch(`/api/leads/${leadId}/activities`).then(r => r.json())
+  });
+
+  return (
+    <div className="space-y-2 mt-4">
+      {data?.map(activity => (
+        <div key={activity.id} className="flex gap-3 text-sm">
+          <span className="text-muted-foreground">{activity.type}</span>
+          <span>{activity.notes}</span>
+          <span className="ml-auto text-xs text-muted-foreground">
+            {formatRelative(activity.createdAt)}
+          </span>
+        </div>
+      ))}
+      <LogActivityForm leadId={leadId} />
+    </div>
+  );
+};
+Disposition status badge on lead rows:
+typescriptconst DISPOSITION_COLORS = {
+  converted:      "bg-green-500",
+  contacted:      "bg-blue-500",
+  callback:       "bg-yellow-500",
+  not_interested: "bg-red-500",
+  voicemail:      "bg-gray-500",
+};
+
+⏰ 3. Lead Aging + Decay
+Add to your leads table:
+typescriptcapturedAt: timestamp("captured_at").defaultNow(),
+agingScore: integer("aging_score").default(100), // degrades over time
+Server-side aging calculation (run on a cron or compute on read):
+typescript// utils/leadAging.ts
+export const computeAgingScore = (capturedAt: Date, baseQuality: number): number => {
+  const hoursOld = (Date.now() - capturedAt.getTime()) / 36e5;
+  const decayRate = 0.02; // 2% per hour
+  const agingMultiplier = Math.max(0.3, 1 - (hoursOld * decayRate));
+  return Math.round(baseQuality * agingMultiplier);
+};
+Add a cron job using node-cron:
+bashnpm install node-cron
+typescript// server/jobs/ageLeads.ts
+import cron from "node-cron";
+cron.schedule("*/15 * * * *", async () => {
+  const leads = await db.select().from(leadsTable);
+  for (const lead of leads) {
+    const newScore = computeAgingScore(lead.capturedAt, lead.baseQuality);
+    await db.update(leadsTable)
+      .set({ agingScore: newScore })
+      .where(eq(leadsTable.id, lead.id));
+  }
+});
+Surface in UI — add an "Age" column to your lead tables:
+typescriptconst LeadAgeIndicator = ({ capturedAt }) => {
+  const hours = Math.floor((Date.now() - new Date(capturedAt).getTime()) / 36e5);
+  const color = hours < 4 ? "text-green-400" 
+              : hours < 24 ? "text-yellow-400" 
+              : "text-red-400";
+  return <span className={`text-xs font-mono ${color}`}>{hours}h old</span>;
+};
+
+🔔 4. Alerts System
+Schema:
+typescriptexport const alerts = pgTable("alerts", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").references(() => users.id),
+  type: text("type").notNull(), // prime_lead | low_balance | follow_up | market_signal
+  title: text("title").notNull(),
+  body: text("body"),
+  leadId: integer("lead_id"),
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+Auto-generate alerts in your existing route handlers:
+typescript// In your lead creation route:
+if (newLead.qualityScore >= 80) {
+  await db.insert(alerts).values({
+    userId: relevantUserId,
+    type: "prime_lead",
+    title: "New PRIME Lead",
+    body: `${newLead.state} — Score ${newLead.qualityScore}`,
+    leadId: newLead.id,
+  });
+}
+
+// In your purchase route:
+if (user.balance < 100) {
+  await db.insert(alerts).values({
+    userId: user.id,
+    type: "low_balance",
+    title: "Low Balance Warning",
+    body: `Balance is $${user.balance.toFixed(2)}`,
+  });
+}
+Frontend — poll with TanStack Query:
+typescriptconst { data: alerts } = useQuery({
+  queryKey: ["alerts"],
+  queryFn: () => fetch("/api/alerts/unread").then(r => r.json()),
+  refetchInterval: 30_000, // every 30 seconds
+});
+
+// Bell icon with badge in your nav
+<Bell className="w-5 h-5" />
+{alerts?.length > 0 && (
+  <span className="absolute -top-1 -right-1 bg-red-500 text-white 
+                   text-xs rounded-full w-4 h-4 flex items-center justify-center">
+    {alerts.length}
+  </span>
+)}
+
+📤 5. Export / Reporting
+CSV export — pure Express, no new libraries:
+typescript// GET /api/export/leads?format=csv&state=FL&segment=medicare
+app.get("/api/export/leads", requireAuth, async (req, res) => {
+  const leads = await db.select().from(leadsTable)
+    .where(/* apply filters from req.query */);
+
+  const headers = ["ID","Email","State","Quality","Segment","Captured"];
+  const rows = leads.map(l => 
+    [l.id, l.email, l.state, l.qualityScore, l.segment, l.capturedAt].join(",")
+  );
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="leads-${Date.now()}.csv"`);
+  res.send([headers.join(","), ...rows].join("\n"));
+});
+Frontend trigger:
+typescriptconst exportLeads = (filters) => {
+  const params = new URLSearchParams(filters);
+  window.open(`/api/export/leads?${params}`, "_blank");
+};
+
+<Button onClick={() => exportLeads({ state: selectedState, segment: selectedSegment })}>
+  <Download className="w-4 h-4 mr-2" /> Export CSV
+</Button>
+
+🧹 6. Deduplication on Purchase
+Add to your buy route:
+typescript// server/routes/marketplace.ts — inside purchase handler
+const existing = await db.select()
+  .from(userLeads)
+  .where(and(
+    eq(userLeads.userId, req.user.id),
+    eq(userLeads.leadId, listing.leadId)
+  ))
+  .limit(1);
+
+if (existing.length > 0) {
+  return res.status(409).json({ 
+    error: "duplicate",
+    message: "You already own this lead" 
+  });
+}
+Surface in your Purchase Confirmation Modal:
+typescript// Before opening modal, check ownership
+const { data: owned } = useQuery({
+  queryKey: ["lead-owned", listingId],
+  queryFn: () => fetch(`/api/leads/${leadId}/owned`).then(r => r.json()),
+});
+
+{owned && (
+  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3 text-sm text-yellow-400">
+    ⚠️ You already have this lead in your portfolio
+  </div>
+)}
+
+✅ 7. TCPA Compliance Flags
+Cheap to add now, expensive to retrofit later:
+typescript// Add to leads table schema
+tcpaConsent: boolean("tcpa_consent").default(false),
+tcpaConsentDate: timestamp("tcpa_consent_date"),
+tcpaConsentSource: text("tcpa_consent_source"), // web_form | phone | third_party
+dnc: boolean("dnc").default(false), // Do Not Call
+dncAddedAt: timestamp("dnc_added_at"),
+Block purchase if DNC:
+typescriptif (lead.dnc) {
+  return res.status(403).json({ error: "Lead is on DNC registry" });
+}
+Surface in lead detail:
+typescript<div className="flex gap-2 mt-2">
+  {lead.tcpaConsent 
+    ? <Badge className="bg-green-500/20 text-green-400">TCPA Consented</Badge>
+    : <Badge className="bg-red-500/20 text-red-400">No Consent</Badge>
+  }
+  {lead.dnc && <Badge className="bg-red-600">DNC</Badge>}
+</div>
+
+📊 8. Conversion Attribution Analytics
+New materialized view or query in your analytics route:
+typescript// GET /api/analytics/conversion-attribution
+const attribution = await db.execute(sql`
+  SELECT 
+    l.state,
+    l.segment,
+    l.quality_tier,
+    COUNT(*) as total_leads,
+    SUM(CASE WHEN la.disposition = 'converted' THEN 1 ELSE 0 END) as conversions,
+    ROUND(
+      SUM(CASE WHEN la.disposition = 'converted' THEN 1 ELSE 0 END)::decimal 
+      / COUNT(*) * 100, 2
+    ) as conv_rate
+  FROM leads l
+  LEFT JOIN lead_activities la ON la.lead_id = l.id
+  GROUP BY l.state, l.segment, l.quality_tier
+  ORDER BY conv_rate DESC
+`);
+New chart in your Analytics tab — a grouped bar chart by segment + quality tier using your existing Recharts setup.
+
+🗺️ Priority Order to Ship
+#FeatureEffortImpact1Auth + RBACHigh🔴 Required2TCPA flagsLow🔴 Legal risk3DeduplicationLow🟠 UX4Lead agingLow🟠 Core logic5CRM activitiesMedium🟠 Core value6AlertsMedium🟡 Engagement7CSV exportLow🟡 Operational8Conversion analyticsMedium🟡 Insight
