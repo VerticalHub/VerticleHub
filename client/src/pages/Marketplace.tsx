@@ -1,438 +1,698 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShoppingCart, TrendingUp, Star, Filter, DollarSign, MapPin, Building2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { Helmet } from "react-helmet";
+import {
+  AreaChart, Area, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line
+} from "recharts";
+import {
+  TrendingUp, Filter, ShoppingCart, Zap, RefreshCw,
+  ChevronUp, ChevronDown, MapPin,
+  Activity, DollarSign, Star, ArrowUpRight, ArrowDownRight, Package
+} from "lucide-react";
 
 interface LeadListing {
-  id: number;
-  leadId: number;
-  sellerId: number;
-  price: string;
-  qualityScore: number;
-  timesResold: number;
-  industry: string;
-  geography: string;
-  isActive: boolean;
-  createdAt: string;
+  id: number; leadId: number; sellerId: number; price: string;
+  qualityScore: number; timesResold: number; industry: string;
+  geography: string; isActive: boolean; createdAt: string;
 }
-
 interface DemandPrediction {
-  id: number;
-  industry: string;
-  geography: string;
-  predictedDemand: number;
+  id: number; industry: string; geography: string; predictedDemand: number;
   confidence: string;
-  factors: {
-    seasonality: number;
-    economic: number;
-    regulatory: number;
-    historical: number;
-  };
-  predictionDate: string;
-  validUntil: string;
+  factors: { seasonality: number; economic: number; regulatory: number; historical: number };
+  predictionDate: string; validUntil: string;
 }
+interface CreditAccount { id: number; userId: number; balance: string; totalPurchased: string; }
+interface CreditPackage { id: number; name: string; credits: number; price: string; discountPercentage: string; isActive: boolean; }
 
-interface CreditAccount {
-  id: number;
-  userId: number;
-  balance: string;
-  totalPurchased: string;
-}
+const demandHistory = [
+  { time: "09:00", aca: 72, medicare: 85, finalExp: 58 },
+  { time: "10:00", aca: 78, medicare: 88, finalExp: 62 },
+  { time: "11:00", aca: 81, medicare: 84, finalExp: 67 },
+  { time: "12:00", aca: 76, medicare: 91, finalExp: 64 },
+  { time: "13:00", aca: 84, medicare: 89, finalExp: 70 },
+  { time: "14:00", aca: 88, medicare: 92, finalExp: 68 },
+  { time: "15:00", aca: 85, medicare: 90, finalExp: 72 },
+  { time: "16:00", aca: 91, medicare: 94, finalExp: 75 },
+];
 
-interface CreditPackage {
-  id: number;
-  name: string;
-  credits: number;
-  price: string;
-  discountPercentage: string;
-  isActive: boolean;
-}
+const priceHistory = [
+  { day: "Mon", avg: 28.5, high: 42, low: 18 },
+  { day: "Tue", avg: 31.2, high: 48, low: 22 },
+  { day: "Wed", avg: 29.8, high: 45, low: 19 },
+  { day: "Thu", avg: 34.1, high: 52, low: 24 },
+  { day: "Fri", avg: 36.7, high: 58, low: 26 },
+  { day: "Sat", avg: 33.4, high: 50, low: 21 },
+  { day: "Sun", avg: 38.2, high: 61, low: 28 },
+];
+
+const geoData = [
+  { state: "FL", volume: 312, demand: 91, avgPrice: 38.4 },
+  { state: "CA", volume: 287, demand: 88, avgPrice: 42.1 },
+  { state: "TX", volume: 241, demand: 79, avgPrice: 31.6 },
+  { state: "NY", volume: 198, demand: 84, avgPrice: 44.8 },
+  { state: "AZ", volume: 167, demand: 72, avgPrice: 29.3 },
+];
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-2 text-[11px] font-mono">
+        <p className="text-[#4a6080] mb-1">{label}</p>
+        {payload.map((p: any, i: number) => (
+          <p key={i} style={{ color: p.color }}>{p.name}: {p.value}</p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function Marketplace() {
-  const [filters, setFilters] = useState({
-    industry: "",
-    geography: "",
-    minPrice: "",
-    maxPrice: ""
-  });
-  const [selectedUserId] = useState(1); // Demo user ID
+  const [activeTab, setActiveTab] = useState<"order-book" | "predictions" | "geo" | "credits">("order-book");
+  const [sortField, setSortField] = useState<string>("qualityScore");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [filters, setFilters] = useState({ industry: "", geography: "", minPrice: "", maxPrice: "" });
+  const [selectedListing, setSelectedListing] = useState<LeadListing | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedUserId] = useState(1);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch lead listings
-  const { data: listings = [], isLoading: loadingListings } = useQuery({
-    queryKey: ['lead-listings', filters],
-    queryFn: () => apiRequest(`/api/lead-listings?${new URLSearchParams(filters).toString()}`),
-  });
+  const filterParams = new URLSearchParams(
+    Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ""))
+  ).toString();
 
-  // Fetch demand predictions
-  const { data: predictions = [], isLoading: loadingPredictions } = useQuery({
-    queryKey: ['demand-predictions'],
-    queryFn: () => apiRequest('/api/demand-predictions'),
+  const { data: listingsResp, isLoading: loadingListings, refetch } = useQuery<any>({
+    queryKey: ["/api/lead-listings", filterParams],
+    queryFn: () => fetch(`/api/lead-listings${filterParams ? `?${filterParams}` : ""}`).then(r => r.json()),
+    refetchInterval: 30000,
   });
+  const listings: LeadListing[] = listingsResp?.data || [];
 
-  // Fetch credit account
-  const { data: creditAccount } = useQuery({
-    queryKey: ['credit-account', selectedUserId],
-    queryFn: () => apiRequest(`/api/credits/${selectedUserId}`),
+  const { data: predictionsResp } = useQuery<any>({
+    queryKey: ["/api/demand-predictions"],
   });
+  const predictions: DemandPrediction[] = predictionsResp?.data || [];
 
-  // Fetch credit packages
-  const { data: creditPackages = [] } = useQuery({
-    queryKey: ['credit-packages'],
-    queryFn: () => apiRequest('/api/credit-packages'),
+  const { data: creditResp } = useQuery<any>({
+    queryKey: [`/api/credits/${selectedUserId}`],
   });
+  const creditAccount: CreditAccount | null = creditResp?.data || null;
 
-  // Purchase lead mutation
-  const purchaseLeadMutation = useMutation({
-    mutationFn: (listingId: number) => 
-      apiRequest(`/api/lead-listings/${listingId}/purchase`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ buyerId: selectedUserId })
-      }),
+  const { data: packagesResp } = useQuery<any>({
+    queryKey: ["/api/credit-packages"],
+  });
+  const creditPackages: CreditPackage[] = packagesResp?.data || [];
+
+  const purchaseMutation = useMutation({
+    mutationFn: (listingId: number) =>
+      apiRequest("POST", `/api/lead-listings/${listingId}/purchase`, { buyerId: selectedUserId }),
     onSuccess: () => {
-      toast({ title: "Success", description: "Lead purchased successfully!" });
-      queryClient.invalidateQueries({ queryKey: ['lead-listings'] });
-      queryClient.invalidateQueries({ queryKey: ['credit-account'] });
+      toast({ title: "ORDER FILLED", description: "Lead acquisition confirmed." });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-listings"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/credits/${selectedUserId}`] });
+      setSelectedListing(null);
     },
-    onError: (error: any) => {
-      toast({ 
-        title: "Error", 
-        description: error.message || "Failed to purchase lead",
-        variant: "destructive"
-      });
-    }
+    onError: (e: any) => toast({ title: "ORDER REJECTED", description: e.message || "Insufficient credits", variant: "destructive" }),
   });
 
-  // Purchase credits mutation
-  const purchaseCreditsMutation = useMutation({
-    mutationFn: (packageData: { packageId: number; amount: string }) => 
-      apiRequest('/api/credits/purchase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId: selectedUserId, 
-          packageId: packageData.packageId,
-          amount: packageData.amount
-        })
-      }),
+  const creditMutation = useMutation({
+    mutationFn: (pkg: CreditPackage) =>
+      apiRequest("POST", "/api/credits/purchase", { userId: selectedUserId, packageId: pkg.id, amount: pkg.price }),
     onSuccess: () => {
-      toast({ title: "Success", description: "Credits purchased successfully!" });
-      queryClient.invalidateQueries({ queryKey: ['credit-account'] });
+      toast({ title: "CREDITS DEPOSITED", description: "Balance updated successfully." });
+      queryClient.invalidateQueries({ queryKey: [`/api/credits/${selectedUserId}`] });
     },
-    onError: (error: any) => {
-      toast({ 
-        title: "Error", 
-        description: error.message || "Failed to purchase credits",
-        variant: "destructive"
-      });
-    }
   });
 
-  // Generate prediction mutation
-  const generatePredictionMutation = useMutation({
-    mutationFn: (data: { industry: string; geography: string }) => 
-      apiRequest('/api/demand-predictions/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      }),
+  const genPrediction = useMutation({
+    mutationFn: (data: { industry: string; geography: string }) =>
+      apiRequest("POST", "/api/demand-predictions/generate", data),
     onSuccess: () => {
-      toast({ title: "Success", description: "AI prediction generated!" });
-      queryClient.invalidateQueries({ queryKey: ['demand-predictions'] });
-    }
+      toast({ title: "AI MODEL RAN", description: "Prediction generated." });
+      queryClient.invalidateQueries({ queryKey: ["/api/demand-predictions"] });
+    },
   });
 
-  const handleFilterChange = (key: string, value: string) => {
-    // Convert "all" to empty string for API filtering
-    const apiValue = value === "all" ? "" : value;
-    setFilters(prev => ({ ...prev, [key]: apiValue }));
+  const sorted = [...listings].sort((a: LeadListing, b: LeadListing) => {
+    const av = sortField === "price" ? parseFloat(a.price) : (a as any)[sortField];
+    const bv = sortField === "price" ? parseFloat(b.price) : (b as any)[sortField];
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
+
+  const handleSort = (f: string) => {
+    if (sortField === f) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortField(f); setSortDir("desc"); }
   };
 
-  const getQualityBadgeColor = (score: number) => {
-    if (score >= 90) return "bg-green-500";
-    if (score >= 70) return "bg-yellow-500";
-    return "bg-red-500";
-  };
+  const qColor = (s: number) => s >= 85 ? "#00d084" : s >= 65 ? "#fbbf24" : "#ff4d4d";
+  const qLabel = (s: number) => s >= 85 ? "PRIME" : s >= 65 ? "GOOD" : "AGED";
 
-  const getDemandBadgeColor = (demand: number) => {
-    if (demand >= 80) return "bg-green-500";
-    if (demand >= 50) return "bg-yellow-500";
-    return "bg-red-500";
-  };
+  const tabs = [
+    { id: "order-book", label: "ORDER BOOK" },
+    { id: "predictions", label: "AI SIGNALS" },
+    { id: "geo", label: "GEO HEAT MAP" },
+    { id: "credits", label: "FUND ACCOUNT" },
+  ] as const;
 
   return (
     <>
       <Helmet>
-        <title>Lead Marketplace | Buy & Sell Healthcare Leads</title>
-        <meta name="description" content="Access our marketplace to buy and sell healthcare leads with quality scoring, AI predictions, and credit system for bulk purchases." />
+        <title>Marketplace | HealthLead Pro</title>
+        <meta name="description" content="Advanced healthcare lead marketplace with real-time demand signals and AI predictions." />
       </Helmet>
-
       <Header />
-      
-      <main className="py-8 bg-gray-50 min-h-screen">
-        <div className="container mx-auto px-4">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Lead Marketplace</h1>
-            <p className="text-gray-600">Buy and sell healthcare leads with quality scoring and AI-powered demand predictions</p>
+
+      <div className="min-h-screen bg-[#070d1a] text-[#c8daf0]">
+        {/* Top KPI Strip */}
+        <div className="grid grid-cols-2 md:grid-cols-5 border-b border-[#1e2d4a]">
+          {[
+            { label: "AVAILABLE LEADS", value: listings.length.toString(), sub: "active listings", icon: Package, color: "#38bdf8" },
+            { label: "CREDIT BALANCE", value: `$${creditAccount?.balance || "0.00"}`, sub: "available funds", icon: DollarSign, color: "#00d084" },
+            { label: "AVG QUALITY", value: listings.length ? `${Math.round(listings.reduce((s, l) => s + l.qualityScore, 0) / listings.length)}%` : "—", sub: "across listings", icon: Star, color: "#fbbf24" },
+            { label: "AVG PRICE", value: listings.length ? `$${(listings.reduce((s, l) => s + parseFloat(l.price), 0) / listings.length).toFixed(2)}` : "—", sub: "per lead", icon: TrendingUp, color: "#a78bfa" },
+            { label: "AI PREDICTIONS", value: predictions.length.toString(), sub: "active signals", icon: Activity, color: "#fb923c" },
+          ].map(({ label, value, sub, icon: Icon, color }) => (
+            <div key={label} className="flex items-center gap-3 px-5 py-3 border-r border-[#1e2d4a] last:border-r-0">
+              <div className="w-8 h-8 rounded-sm flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}18` }}>
+                <Icon className="w-4 h-4" style={{ color }} />
+              </div>
+              <div>
+                <p className="text-[9px] font-mono tracking-widest text-[#4a6080] uppercase">{label}</p>
+                <p className="text-[15px] font-mono font-bold" style={{ color }}>{value}</p>
+                <p className="text-[9px] text-[#2a4060]">{sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tab Nav */}
+        <div className="flex border-b border-[#1e2d4a] bg-[#050a14]">
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)}
+              className={`panel-tab ${activeTab === t.id ? "panel-tab-active" : ""}`}>
+              {t.label}
+            </button>
+          ))}
+          <div className="flex items-center gap-2 ml-auto px-4">
+            <button onClick={() => setFilterOpen(f => !f)}
+              className={`flex items-center gap-1.5 text-[10px] font-mono px-3 py-1.5 border rounded-sm transition-colors ${filterOpen ? "border-[#2563eb] text-[#38bdf8] bg-[#0d1e3a]" : "border-[#1e2d4a] text-[#4a6080] hover:border-[#2a3d5a]"}`}>
+              <Filter className="w-3 h-3" /> FILTERS
+            </button>
+            <button onClick={() => refetch()}
+              className="flex items-center gap-1.5 text-[10px] font-mono px-3 py-1.5 border border-[#1e2d4a] text-[#4a6080] hover:border-[#2a3d5a] rounded-sm transition-colors">
+              <RefreshCw className="w-3 h-3" /> REFRESH
+            </button>
           </div>
+        </div>
 
-          <Tabs defaultValue="marketplace" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="marketplace">Marketplace</TabsTrigger>
-              <TabsTrigger value="predictions">AI Predictions</TabsTrigger>
-              <TabsTrigger value="credits">Credits</TabsTrigger>
-            </TabsList>
+        {/* Filter Panel */}
+        {filterOpen && (
+          <div className="bg-[#050a14] border-b border-[#1e2d4a] px-4 py-3">
+            <div className="flex flex-wrap gap-3 items-center">
+              <span className="text-[10px] font-mono text-[#4a6080] uppercase tracking-widest">Filter:</span>
+              {[
+                { key: "industry", opts: [["", "All Industries"], ["healthcare", "Healthcare"], ["insurance", "Insurance"], ["medicare", "Medicare"]] },
+                { key: "geography", opts: [["", "All States"], ["CA", "California"], ["NY", "New York"], ["TX", "Texas"], ["FL", "Florida"]] },
+              ].map(({ key, opts }) => (
+                <select key={key} value={filters[key as keyof typeof filters]}
+                  onChange={e => setFilters(p => ({ ...p, [key]: e.target.value }))}
+                  className="bg-[#0d1526] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                  {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              ))}
+              {[
+                { key: "minPrice", placeholder: "Min $" },
+                { key: "maxPrice", placeholder: "Max $" },
+              ].map(({ key, placeholder }) => (
+                <input key={key} type="number" placeholder={placeholder} value={filters[key as keyof typeof filters]}
+                  onChange={e => setFilters(p => ({ ...p, [key]: e.target.value }))}
+                  className="bg-[#0d1526] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-2 py-1.5 w-24 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a3d5a]" />
+              ))}
+              <button onClick={() => setFilters({ industry: "", geography: "", minPrice: "", maxPrice: "" })}
+                className="text-[10px] font-mono text-[#ff4d4d] hover:text-[#ff6666] transition-colors">
+                CLEAR
+              </button>
+            </div>
+          </div>
+        )}
 
-            <TabsContent value="marketplace" className="space-y-6">
-              {/* Filters */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Filter className="w-5 h-5" />
-                    Filters
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Select onValueChange={(value) => handleFilterChange('industry', value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Industry" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Industries</SelectItem>
-                        <SelectItem value="healthcare">Healthcare</SelectItem>
-                        <SelectItem value="insurance">Insurance</SelectItem>
-                        <SelectItem value="medicare">Medicare</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    
-                    <Select onValueChange={(value) => handleFilterChange('geography', value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Geography" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All States</SelectItem>
-                        <SelectItem value="CA">California</SelectItem>
-                        <SelectItem value="NY">New York</SelectItem>
-                        <SelectItem value="TX">Texas</SelectItem>
-                        <SelectItem value="FL">Florida</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    
-                    <Input
-                      placeholder="Min Price"
-                      type="number"
-                      value={filters.minPrice}
-                      onChange={(e) => handleFilterChange('minPrice', e.target.value)}
-                    />
-                    
-                    <Input
-                      placeholder="Max Price"
-                      type="number"
-                      value={filters.maxPrice}
-                      onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+        <div className="flex" style={{ height: "calc(100vh - 190px)" }}>
+          <div className="flex-1 overflow-hidden flex flex-col">
 
-              {/* Credit Balance */}
-              {creditAccount && (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Available Credits</p>
-                        <p className="text-2xl font-bold">${creditAccount.balance}</p>
-                      </div>
-                      <DollarSign className="w-8 h-8 text-green-500" />
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Lead Listings */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {loadingListings ? (
-                  <div className="col-span-full text-center py-8">Loading listings...</div>
-                ) : listings.length === 0 ? (
-                  <div className="col-span-full text-center py-8">No leads available</div>
-                ) : (
-                  listings.map((listing: LeadListing) => (
-                    <Card key={listing.id} className="hover:shadow-lg transition-shadow">
-                      <CardHeader>
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-lg">Lead #{listing.leadId}</CardTitle>
-                            <p className="text-sm text-gray-600 flex items-center gap-1">
-                              <Building2 className="w-4 h-4" />
-                              {listing.industry}
-                            </p>
-                            <p className="text-sm text-gray-600 flex items-center gap-1">
-                              <MapPin className="w-4 h-4" />
-                              {listing.geography}
-                            </p>
-                          </div>
-                          <Badge className={`${getQualityBadgeColor(listing.qualityScore)} text-white`}>
-                            {listing.qualityScore}% Quality
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-2xl font-bold text-green-600">${listing.price}</span>
-                            <span className="text-sm text-gray-500">
-                              Resold {listing.timesResold} times
+            {/* ORDER BOOK TAB */}
+            {activeTab === "order-book" && (
+              <div className="flex flex-1 overflow-hidden">
+                <div className="flex-1 overflow-auto">
+                  <table className="w-full text-[11px] font-mono border-collapse">
+                    <thead className="sticky top-0 bg-[#050a14] z-10">
+                      <tr className="border-b border-[#1e2d4a]">
+                        {[
+                          { label: "ID", field: null },
+                          { label: "INDUSTRY", field: "industry" },
+                          { label: "STATE", field: "geography" },
+                          { label: "QUALITY", field: "qualityScore" },
+                          { label: "DECAY", field: "timesResold" },
+                          { label: "PRICE", field: "price" },
+                          { label: "LISTED", field: "createdAt" },
+                          { label: "ACTION", field: null },
+                        ].map(({ label, field }) => (
+                          <th key={label} onClick={() => field && handleSort(field)}
+                            className={`text-left px-3 py-2 text-[9px] tracking-widest text-[#4a6080] border-r border-[#111e33] last:border-r-0 ${field ? "cursor-pointer hover:text-[#94b4d4] select-none" : ""}`}>
+                            <div className="flex items-center gap-1">
+                              {label}
+                              {field && sortField === field && (
+                                sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />
+                              )}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loadingListings ? (
+                        Array.from({ length: 8 }).map((_, i) => (
+                          <tr key={i} className="border-b border-[#111e33]">
+                            {Array.from({ length: 8 }).map((_, j) => (
+                              <td key={j} className="px-3 py-2.5">
+                                <div className="h-3 bg-[#0d1526] rounded animate-pulse" style={{ width: `${40 + Math.random() * 40}%` }} />
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      ) : sorted.length === 0 ? (
+                        <tr><td colSpan={8} className="text-center py-12 text-[#2a3d5a] font-mono">NO LISTINGS MATCH CURRENT FILTERS</td></tr>
+                      ) : sorted.map((l: LeadListing) => (
+                        <tr key={l.id} onClick={() => setSelectedListing(s => s?.id === l.id ? null : l)}
+                          className={`ticker-row ${selectedListing?.id === l.id ? "bg-[#0d1e35] border-l-2 border-l-[#2563eb]" : ""}`}>
+                          <td className="px-3 py-2.5 text-[#4a6080]">#{l.id}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={`uppercase font-semibold ${l.industry === "medicare" ? "text-[#a78bfa]" : l.industry === "healthcare" ? "text-[#38bdf8]" : "text-[#00d084]"}`}>
+                              {l.industry}
                             </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-[#94b4d4]">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-[#2a4060]" />{l.geography}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-1.5 bg-[#0d1526] rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${l.qualityScore}%`, backgroundColor: qColor(l.qualityScore) }} />
+                              </div>
+                              <span style={{ color: qColor(l.qualityScore) }}>{l.qualityScore}</span>
+                              <span className="text-[9px] px-1 py-0.5 rounded-sm" style={{ color: qColor(l.qualityScore), backgroundColor: `${qColor(l.qualityScore)}18` }}>
+                                {qLabel(l.qualityScore)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className={l.timesResold > 2 ? "text-[#ff4d4d]" : l.timesResold > 0 ? "text-[#fbbf24]" : "text-[#00d084]"}>
+                              {l.timesResold}x
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="text-[#00d084] font-bold">${parseFloat(l.price).toFixed(2)}</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-[#2a4060]">
+                            {new Date(l.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <button onClick={e => { e.stopPropagation(); purchaseMutation.mutate(l.id); }}
+                              disabled={purchaseMutation.isPending}
+                              className="btn-buy text-[10px] flex items-center gap-1">
+                              <ShoppingCart className="w-3 h-3" /> BUY
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Right Detail Panel */}
+                {selectedListing && (
+                  <div className="w-72 border-l border-[#1e2d4a] bg-[#0a1120] flex flex-col flex-shrink-0 overflow-auto">
+                    <div className="terminal-header flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">LEAD DETAIL</span>
+                      <button onClick={() => setSelectedListing(null)} className="text-[#2a4060] hover:text-[#94b4d4] text-xs">✕</button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <p className="terminal-label mb-1">Listing ID</p>
+                        <p className="font-mono text-[#38bdf8] text-lg font-bold">#{selectedListing.id}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { label: "Industry", value: selectedListing.industry.toUpperCase(), color: "#38bdf8" },
+                          { label: "Geography", value: selectedListing.geography, color: "#94b4d4" },
+                          { label: "Times Resold", value: `${selectedListing.timesResold}x`, color: selectedListing.timesResold > 2 ? "#ff4d4d" : "#00d084" },
+                          { label: "Status", value: selectedListing.isActive ? "ACTIVE" : "SOLD", color: selectedListing.isActive ? "#00d084" : "#ff4d4d" },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm p-2">
+                            <p className="terminal-label">{label}</p>
+                            <p className="font-mono text-xs font-semibold mt-0.5" style={{ color }}>{value}</p>
                           </div>
-                          
-                          <Button 
-                            onClick={() => purchaseLeadMutation.mutate(listing.id)}
-                            disabled={purchaseLeadMutation.isPending}
-                            className="w-full"
-                          >
-                            <ShoppingCart className="w-4 h-4 mr-2" />
-                            Purchase Lead
-                          </Button>
+                        ))}
+                      </div>
+                      <div className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm p-3">
+                        <p className="terminal-label mb-2">Quality Score</p>
+                        <div className="flex items-end gap-2 mb-2">
+                          <span className="text-3xl font-mono font-bold" style={{ color: qColor(selectedListing.qualityScore) }}>
+                            {selectedListing.qualityScore}
+                          </span>
+                          <span className="text-[10px] text-[#4a6080] pb-1">/ 100</span>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                        <div className="w-full h-2 bg-[#0d1526] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${selectedListing.qualityScore}%`, backgroundColor: qColor(selectedListing.qualityScore) }} />
+                        </div>
+                        <p className="text-[9px] text-[#2a4060] mt-1">Decay: -5 pts per resale</p>
+                      </div>
+                      <div className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm p-3">
+                        <p className="terminal-label mb-1">Ask Price</p>
+                        <p className="text-2xl font-mono font-bold text-[#00d084]">${parseFloat(selectedListing.price).toFixed(2)}</p>
+                        <p className="text-[9px] text-[#4a6080] mt-1">
+                          Balance after: <span className={parseFloat(creditAccount?.balance || "0") >= parseFloat(selectedListing.price) ? "text-[#00d084]" : "text-[#ff4d4d]"}>
+                            ${Math.max(0, parseFloat(creditAccount?.balance || "0") - parseFloat(selectedListing.price)).toFixed(2)}
+                          </span>
+                        </p>
+                      </div>
+                      <button onClick={() => purchaseMutation.mutate(selectedListing.id)}
+                        disabled={purchaseMutation.isPending}
+                        className="w-full py-3 bg-[#0a2e1a] hover:bg-[#0d3d22] border border-[#00d084] text-[#00d084] font-mono font-bold text-sm rounded-sm transition-colors flex items-center justify-center gap-2">
+                        <ShoppingCart className="w-4 h-4" />
+                        {purchaseMutation.isPending ? "PROCESSING..." : "EXECUTE ORDER"}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
-            </TabsContent>
+            )}
 
-            <TabsContent value="predictions" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5" />
-                    AI Demand Predictions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <Select onValueChange={(value) => generatePredictionMutation.mutate({ industry: value, geography: 'CA' })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Generate prediction for industry" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="healthcare">Healthcare</SelectItem>
-                        <SelectItem value="insurance">Insurance</SelectItem>
-                        <SelectItem value="medicare">Medicare</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    
-                    <Button 
-                      onClick={() => generatePredictionMutation.mutate({ industry: 'healthcare', geography: 'CA' })}
-                      disabled={generatePredictionMutation.isPending}
-                    >
-                      Generate AI Prediction
-                    </Button>
+            {/* AI SIGNALS TAB */}
+            {activeTab === "predictions" && (
+              <div className="flex-1 overflow-auto p-4 space-y-4">
+                <div className="terminal-card">
+                  <div className="terminal-header flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">REAL-TIME DEMAND INDEX — INTRADAY</span>
+                    <div className="flex gap-2">
+                      {[["#38bdf8", "ACA"], ["#a78bfa", "Medicare"], ["#00d084", "Final Exp"]].map(([c, l]) => (
+                        <div key={l} className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
+                          <span className="text-[9px] font-mono text-[#4a6080]">{l}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {loadingPredictions ? (
-                      <div className="col-span-full text-center py-8">Loading predictions...</div>
-                    ) : predictions.length === 0 ? (
-                      <div className="col-span-full text-center py-8">No predictions available</div>
-                    ) : (
-                      predictions.map((prediction: DemandPrediction) => (
-                        <Card key={prediction.id}>
-                          <CardHeader>
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <CardTitle className="text-lg">{prediction.industry}</CardTitle>
-                                <p className="text-sm text-gray-600">{prediction.geography}</p>
-                              </div>
-                              <Badge className={`${getDemandBadgeColor(prediction.predictedDemand)} text-white`}>
-                                {prediction.predictedDemand}% Demand
-                              </Badge>
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2">
-                              <div className="flex justify-between">
-                                <span>Confidence:</span>
-                                <span className="font-semibold">{prediction.confidence}%</span>
-                              </div>
-                              <div className="text-sm text-gray-600">
-                                <p>Factors:</p>
-                                <ul className="ml-4 space-y-1">
-                                  <li>• Seasonality: {prediction.factors.seasonality}%</li>
-                                  <li>• Economic: {prediction.factors.economic}%</li>
-                                  <li>• Regulatory: {prediction.factors.regulatory}%</li>
-                                  <li>• Historical: {prediction.factors.historical}%</li>
-                                </ul>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                    )}
+                  <div className="p-4 h-52">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={demandHistory}>
+                        <defs>
+                          {[["aca", "#38bdf8"], ["medicare", "#a78bfa"], ["finalExp", "#00d084"]].map(([k, c]) => (
+                            <linearGradient key={k} id={`g-${k}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={c} stopOpacity={0.3} />
+                              <stop offset="95%" stopColor={c} stopOpacity={0} />
+                            </linearGradient>
+                          ))}
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="time" />
+                        <YAxis domain={[40, 100]} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area type="monotone" dataKey="aca" stroke="#38bdf8" fill="url(#g-aca)" strokeWidth={1.5} name="ACA" />
+                        <Area type="monotone" dataKey="medicare" stroke="#a78bfa" fill="url(#g-medicare)" strokeWidth={1.5} name="Medicare" />
+                        <Area type="monotone" dataKey="finalExp" stroke="#00d084" fill="url(#g-finalExp)" strokeWidth={1.5} name="Final Exp" />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </div>
 
-            <TabsContent value="credits" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Credit Packages</CardTitle>
-                  <p className="text-gray-600">Purchase credits for bulk lead purchases with volume discounts</p>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {creditPackages.map((pkg: CreditPackage) => (
-                      <Card key={pkg.id} className="border-2 hover:border-blue-500 transition-colors">
-                        <CardHeader>
-                          <CardTitle className="text-lg">{pkg.name}</CardTitle>
-                          <div className="space-y-1">
-                            <p className="text-2xl font-bold">${pkg.price}</p>
-                            <p className="text-sm text-gray-600">{pkg.credits} credits</p>
-                            {parseFloat(pkg.discountPercentage) > 0 && (
-                              <Badge className="bg-green-500 text-white">
-                                {pkg.discountPercentage}% OFF
-                              </Badge>
-                            )}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {predictions.length === 0 ? (
+                    <div className="col-span-full terminal-card p-8 text-center">
+                      <p className="text-[#2a4060] font-mono text-sm mb-4">NO ACTIVE SIGNALS</p>
+                      <button onClick={() => genPrediction.mutate({ industry: "healthcare", geography: "CA" })}
+                        className="btn-terminal flex items-center gap-2 mx-auto">
+                        <Zap className="w-3.5 h-3.5" /> GENERATE SIGNAL
+                      </button>
+                    </div>
+                  ) : predictions.map((p: DemandPrediction) => {
+                    const conf = parseFloat(p.confidence);
+                    const demandColor = p.predictedDemand >= 75 ? "#00d084" : p.predictedDemand >= 50 ? "#fbbf24" : "#ff4d4d";
+                    const radarData = [
+                      { subject: "Seasonal", value: p.factors?.seasonality || 0 },
+                      { subject: "Economic", value: p.factors?.economic || 0 },
+                      { subject: "Regulatory", value: p.factors?.regulatory || 0 },
+                      { subject: "Historical", value: p.factors?.historical || 0 },
+                    ];
+                    return (
+                      <div key={p.id} className="terminal-card">
+                        <div className="terminal-header flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-mono font-bold uppercase" style={{ color: demandColor }}>{p.industry}</span>
+                            <span className="text-[9px] text-[#4a6080] ml-2">· {p.geography}</span>
                           </div>
-                        </CardHeader>
-                        <CardContent>
-                          <Button 
-                            onClick={() => purchaseCreditsMutation.mutate({
-                              packageId: pkg.id,
-                              amount: pkg.price
-                            })}
-                            disabled={purchaseCreditsMutation.isPending}
-                            className="w-full"
-                          >
-                            Purchase Credits
-                          </Button>
-                        </CardContent>
-                      </Card>
+                          <div className="flex items-center gap-1">
+                            {p.predictedDemand >= 75 ? <ArrowUpRight className="w-3 h-3 text-[#00d084]" /> : <ArrowDownRight className="w-3 h-3 text-[#ff4d4d]" />}
+                            <span className="font-mono font-bold text-sm" style={{ color: demandColor }}>{p.predictedDemand}</span>
+                          </div>
+                        </div>
+                        <div className="p-3 flex gap-3">
+                          <div className="flex-1">
+                            <div className="mb-2">
+                              <p className="terminal-label mb-1">Confidence</p>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-[#0d1526] rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full bg-[#38bdf8]" style={{ width: `${conf}%` }} />
+                                </div>
+                                <span className="text-[10px] font-mono text-[#38bdf8]">{conf.toFixed(0)}%</span>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1 text-[10px]">
+                              {radarData.map(r => (
+                                <div key={r.subject}>
+                                  <p className="terminal-label">{r.subject}</p>
+                                  <p className="font-mono text-[#94b4d4]">{r.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="w-24 h-24 flex-shrink-0">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <RadarChart data={radarData}>
+                                <PolarGrid stroke="#1e2d4a" />
+                                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 7, fill: "#2a4060" }} />
+                                <Radar dataKey="value" stroke={demandColor} fill={demandColor} fillOpacity={0.2} />
+                              </RadarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                        <div className="px-3 pb-3">
+                          <button onClick={() => genPrediction.mutate({ industry: p.industry, geography: p.geography })}
+                            className="btn-terminal w-full text-center flex items-center justify-center gap-1 text-[10px]">
+                            <RefreshCw className="w-3 h-3" /> REFRESH SIGNAL
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="terminal-card p-4">
+                  <p className="terminal-label mb-3">GENERATE NEW AI SIGNAL</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { industry: "healthcare", geography: "CA" },
+                      { industry: "medicare", geography: "FL" },
+                      { industry: "insurance", geography: "TX" },
+                      { industry: "healthcare", geography: "NY" },
+                    ].map(({ industry, geography }) => (
+                      <button key={`${industry}-${geography}`}
+                        onClick={() => genPrediction.mutate({ industry, geography })}
+                        disabled={genPrediction.isPending}
+                        className="btn-terminal flex items-center gap-1">
+                        <Zap className="w-3 h-3" />
+                        {industry.toUpperCase()} / {geography}
+                      </button>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                </div>
+              </div>
+            )}
+
+            {/* GEO HEAT MAP TAB */}
+            {activeTab === "geo" && (
+              <div className="flex-1 overflow-auto p-4 space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="terminal-card">
+                    <div className="terminal-header">
+                      <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">VOLUME BY STATE — 7 DAY</span>
+                    </div>
+                    <div className="p-4 h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={geoData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="state" />
+                          <YAxis />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Bar dataKey="volume" fill="#38bdf8" fillOpacity={0.8} radius={[2, 2, 0, 0]} name="Volume" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  <div className="terminal-card">
+                    <div className="terminal-header">
+                      <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">AVG PRICE BY STATE</span>
+                    </div>
+                    <div className="p-4 h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={geoData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="state" />
+                          <YAxis />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Bar dataKey="avgPrice" fill="#00d084" fillOpacity={0.8} radius={[2, 2, 0, 0]} name="Avg $" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="terminal-card">
+                  <div className="terminal-header">
+                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">REGIONAL PERFORMANCE MATRIX</span>
+                  </div>
+                  <table className="w-full text-[11px] font-mono">
+                    <thead>
+                      <tr className="border-b border-[#1e2d4a]">
+                        {["STATE", "LEAD VOLUME", "DEMAND INDEX", "AVG PRICE", "TREND"].map(h => (
+                          <th key={h} className="text-left px-4 py-2 text-[9px] tracking-widest text-[#4a6080]">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {geoData.map((g, i) => (
+                        <tr key={g.state} className="ticker-row">
+                          <td className="px-4 py-2.5 text-[#38bdf8] font-bold">{g.state}</td>
+                          <td className="px-4 py-2.5 text-[#94b4d4]">{g.volume.toLocaleString()}</td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-20 h-1.5 bg-[#0d1526] rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${g.demand}%`, backgroundColor: qColor(g.demand) }} />
+                              </div>
+                              <span style={{ color: qColor(g.demand) }}>{g.demand}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-[#00d084] font-bold">${g.avgPrice}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={`flex items-center gap-1 ${i % 2 === 0 ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
+                              {i % 2 === 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                              {i % 2 === 0 ? "+3.2%" : "-1.4%"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="terminal-card">
+                  <div className="terminal-header">
+                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">PRICE HISTORY — WEEKLY</span>
+                  </div>
+                  <div className="p-4 h-52">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={priceHistory}>
+                        <defs>
+                          <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#00d084" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#00d084" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="day" />
+                        <YAxis />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area type="monotone" dataKey="avg" stroke="#00d084" fill="url(#priceGrad)" strokeWidth={2} name="Avg $" />
+                        <Line type="monotone" dataKey="high" stroke="#fbbf24" strokeWidth={1} strokeDasharray="4 4" name="High" dot={false} />
+                        <Line type="monotone" dataKey="low" stroke="#ff4d4d" strokeWidth={1} strokeDasharray="4 4" name="Low" dot={false} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* FUND ACCOUNT TAB */}
+            {activeTab === "credits" && (
+              <div className="flex-1 overflow-auto p-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="terminal-card lg:col-span-1">
+                    <div className="terminal-header">
+                      <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">ACCOUNT SUMMARY</span>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <p className="terminal-label">Available Balance</p>
+                        <p className="text-3xl font-mono font-bold text-[#00d084] mt-1">${creditAccount?.balance || "0.00"}</p>
+                      </div>
+                      <div>
+                        <p className="terminal-label">Total Deposited</p>
+                        <p className="text-lg font-mono font-bold text-[#38bdf8]">${creditAccount?.totalPurchased || "0.00"}</p>
+                      </div>
+                      <div className="border-t border-[#1e2d4a] pt-3">
+                        <p className="terminal-label mb-2">Buying Power</p>
+                        <div className="w-full h-2 bg-[#0d1526] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-[#00d084] to-[#38bdf8]"
+                            style={{ width: `${Math.min(100, (parseFloat(creditAccount?.balance || "0") / Math.max(1, parseFloat(creditAccount?.totalPurchased || "1"))) * 100)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-2 space-y-3">
+                    <p className="text-[10px] font-mono text-[#4a6080] tracking-widest uppercase">Select Deposit Package</p>
+                    {creditPackages.map((pkg: CreditPackage) => (
+                      <div key={pkg.id} className="terminal-card border border-[#1e2d4a] hover:border-[#2563eb] transition-colors">
+                        <div className="flex items-center justify-between p-4">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-mono font-bold text-[#c8daf0]">{pkg.name.toUpperCase()}</span>
+                              {parseFloat(pkg.discountPercentage) > 0 && (
+                                <span className="text-[9px] bg-[#00d08420] text-[#00d084] border border-[#00d08440] px-1.5 py-0.5 rounded-sm font-mono">
+                                  {pkg.discountPercentage}% OFF
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-[#4a6080] font-mono">{pkg.credits.toLocaleString()} credits · ${(parseFloat(pkg.price) / pkg.credits).toFixed(2)}/credit</p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p className="terminal-label">Total Cost</p>
+                              <p className="text-xl font-mono font-bold text-[#00d084]">${pkg.price}</p>
+                            </div>
+                            <button onClick={() => creditMutation.mutate(pkg)}
+                              disabled={creditMutation.isPending}
+                              className="btn-buy flex items-center gap-2 px-4 py-2">
+                              <DollarSign className="w-3.5 h-3.5" /> DEPOSIT
+                            </button>
+                          </div>
+                        </div>
+                        <div className="h-0.5 bg-gradient-to-r from-[#38bdf8] via-[#00d084] to-transparent" style={{ width: `${(pkg.credits / 5000) * 100}%` }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </main>
-      
-      <Footer />
+      </div>
     </>
   );
 }

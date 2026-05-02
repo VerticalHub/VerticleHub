@@ -13,7 +13,115 @@ import {
 } from "@shared/schema";
 import { ZodError } from "zod";
 
+async function seedDatabase() {
+  try {
+    const existingLeads = await storage.getAllLeads();
+    if (existingLeads.length > 0) return;
+
+    // Seed leads
+    const leadData = [
+      { firstName: "James", lastName: "Harrington", email: "james.h@email.com", phoneNumber: "3055551021", zipCode: "33101", state: "FL", interestedInACA: true, interestedInMedicare: false, interestedInFinalExpense: false, dateOfBirth: "1985-04-12", hasMedicaidMedicareVA: false },
+      { firstName: "Maria", lastName: "Castillo", email: "maria.c@email.com", phoneNumber: "2125550934", zipCode: "10001", state: "NY", interestedInACA: false, interestedInMedicare: true, interestedInFinalExpense: false, dateOfBirth: "1958-08-23", hasMedicaidMedicareVA: false },
+      { firstName: "Robert", lastName: "Kim", email: "r.kim@email.com", phoneNumber: "4155557823", zipCode: "94102", state: "CA", interestedInACA: true, interestedInMedicare: false, interestedInFinalExpense: true, dateOfBirth: "1979-01-07", hasMedicaidMedicareVA: false },
+      { firstName: "Sandra", lastName: "Williams", email: "s.williams@email.com", phoneNumber: "7135554412", zipCode: "77001", state: "TX", interestedInACA: false, interestedInMedicare: false, interestedInFinalExpense: true, dateOfBirth: "1962-11-30", hasMedicaidMedicareVA: false },
+      { firstName: "David", lastName: "Thompson", email: "d.thompson@email.com", phoneNumber: "3055558821", zipCode: "33102", state: "FL", interestedInACA: true, interestedInMedicare: true, interestedInFinalExpense: false, dateOfBirth: "1957-06-15", hasMedicaidMedicareVA: false },
+      { firstName: "Patricia", lastName: "Moore", email: "p.moore@email.com", phoneNumber: "2135556634", zipCode: "90001", state: "CA", interestedInACA: true, interestedInMedicare: false, interestedInFinalExpense: false, dateOfBirth: "1990-03-22", hasMedicaidMedicareVA: false },
+      { firstName: "Michael", lastName: "Davis", email: "m.davis@email.com", phoneNumber: "2125553398", zipCode: "10002", state: "NY", interestedInACA: false, interestedInMedicare: true, interestedInFinalExpense: true, dateOfBirth: "1955-09-18", hasMedicaidMedicareVA: false },
+      { firstName: "Linda", lastName: "Garcia", email: "l.garcia@email.com", phoneNumber: "5125559917", zipCode: "78201", state: "TX", interestedInACA: true, interestedInMedicare: false, interestedInFinalExpense: false, dateOfBirth: "1983-12-05", hasMedicaidMedicareVA: false },
+      { firstName: "Charles", lastName: "Martinez", email: "c.martinez@email.com", phoneNumber: "3055552244", zipCode: "33103", state: "FL", interestedInACA: false, interestedInMedicare: false, interestedInFinalExpense: true, dateOfBirth: "1971-07-14", hasMedicaidMedicareVA: false },
+      { firstName: "Barbara", lastName: "Anderson", email: "b.anderson@email.com", phoneNumber: "4085551876", zipCode: "95101", state: "CA", interestedInACA: true, interestedInMedicare: true, interestedInFinalExpense: false, dateOfBirth: "1956-02-28", hasMedicaidMedicareVA: false },
+      { firstName: "Thomas", lastName: "Jackson", email: "t.jackson@email.com", phoneNumber: "9175558832", zipCode: "10003", state: "NY", interestedInACA: false, interestedInMedicare: true, interestedInFinalExpense: false, dateOfBirth: "1959-10-11", hasMedicaidMedicareVA: false },
+      { firstName: "Jennifer", lastName: "White", email: "j.white@email.com", phoneNumber: "2145553309", zipCode: "75201", state: "TX", interestedInACA: true, interestedInMedicare: false, interestedInFinalExpense: true, dateOfBirth: "1977-05-19", hasMedicaidMedicareVA: false },
+    ];
+
+    const createdLeads = [];
+    for (const l of leadData) createdLeads.push(await storage.createLead(l));
+
+    // Seed credit packages
+    const packages = await storage.getCreditPackages();
+    if (packages.length === 0) {
+      await storage.createCreditPackage({ name: "Starter", credits: 500, price: "99.00", discountPercentage: "0.00", isActive: true });
+      await storage.createCreditPackage({ name: "Professional", credits: 1500, price: "249.00", discountPercentage: "10.00", isActive: true });
+      await storage.createCreditPackage({ name: "Business", credits: 3000, price: "449.00", discountPercentage: "17.00", isActive: true });
+      await storage.createCreditPackage({ name: "Enterprise", credits: 5000, price: "699.00", discountPercentage: "25.00", isActive: true });
+    }
+
+    // Seed credit account for demo user
+    let account = await storage.getCreditAccount(1);
+    if (!account) {
+      account = await storage.createCreditAccount({ userId: 1, balance: "350.00", totalPurchased: "449.00" });
+    }
+
+    // Seed lead listings from created leads
+    const listingConfig = [
+      { idx: 0, price: "42.00", industry: "healthcare", geography: "FL", qualityScore: 97 },
+      { idx: 1, price: "58.50", industry: "medicare", geography: "NY", qualityScore: 94 },
+      { idx: 2, price: "35.00", industry: "healthcare", geography: "CA", qualityScore: 88 },
+      { idx: 3, price: "28.00", industry: "insurance", geography: "TX", qualityScore: 91 },
+      { idx: 4, price: "61.00", industry: "medicare", geography: "FL", qualityScore: 96 },
+      { idx: 5, price: "38.50", industry: "healthcare", geography: "CA", qualityScore: 82 },
+      { idx: 6, price: "55.00", industry: "medicare", geography: "NY", qualityScore: 89 },
+      { idx: 7, price: "31.00", industry: "insurance", geography: "TX", qualityScore: 75 },
+      { idx: 8, price: "26.50", industry: "insurance", geography: "FL", qualityScore: 68 },
+      { idx: 9, price: "47.00", industry: "healthcare", geography: "CA", qualityScore: 93 },
+      { idx: 10, price: "52.00", industry: "medicare", geography: "NY", qualityScore: 85 },
+      { idx: 11, price: "33.00", industry: "insurance", geography: "TX", qualityScore: 78 },
+    ];
+
+    for (const cfg of listingConfig) {
+      if (createdLeads[cfg.idx]) {
+        await storage.createLeadListing({
+          leadId: createdLeads[cfg.idx].id,
+          sellerId: 1,
+          price: cfg.price,
+          qualityScore: cfg.qualityScore,
+          timesResold: Math.floor(Math.random() * 2),
+          industry: cfg.industry,
+          geography: cfg.geography,
+          isActive: true,
+        });
+      }
+    }
+
+    // Seed demand predictions
+    const predConfigs = [
+      { industry: "healthcare", geography: "CA", predictedDemand: 88, confidence: "91.50", factors: { seasonality: 85, economic: 72, regulatory: 90, historical: 88 } },
+      { industry: "medicare", geography: "FL", predictedDemand: 94, confidence: "87.20", factors: { seasonality: 92, economic: 78, regulatory: 95, historical: 91 } },
+      { industry: "insurance", geography: "TX", predictedDemand: 72, confidence: "78.40", factors: { seasonality: 68, economic: 74, regulatory: 71, historical: 75 } },
+      { industry: "healthcare", geography: "NY", predictedDemand: 81, confidence: "83.60", factors: { seasonality: 79, economic: 81, regulatory: 84, historical: 80 } },
+    ];
+
+    const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    for (const p of predConfigs) {
+      await storage.saveDemandPrediction({ ...p, validUntil });
+    }
+
+    // Seed market trends
+    const trendBases = [
+      { industry: "healthcare", geography: "CA" },
+      { industry: "medicare", geography: "FL" },
+      { industry: "insurance", geography: "TX" },
+    ];
+    for (const base of trendBases) {
+      for (let i = 0; i < 5; i++) {
+        await storage.saveMarketTrend({
+          ...base,
+          avgPrice: (20 + Math.random() * 40).toFixed(2),
+          volume: Math.floor(Math.random() * 100) + 30,
+          growthRate: (Math.random() * 20 - 5).toFixed(2),
+        });
+      }
+    }
+
+    console.log("[seed] Database seeded with sample data");
+  } catch (err) {
+    console.error("[seed] Error seeding database:", err);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  await seedDatabase();
+
   // API route to submit a lead
   app.post("/api/leads", async (req, res) => {
     try {
