@@ -36,11 +36,11 @@
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
   }
   ::-webkit-scrollbar-track {
-    background: #0d1526;
+    background: #070d1a;
   }
   ::-webkit-scrollbar-thumb {
     background: #1e3a5f;
@@ -68,28 +68,13 @@
     @apply font-mono font-bold tabular-nums;
   }
 
-  .metric-green {
-    @apply text-[#00d084];
-  }
-
-  .metric-red {
-    @apply text-[#ff4d4d];
-  }
-
-  .metric-blue {
-    @apply text-[#38bdf8];
-  }
-
-  .metric-amber {
-    @apply text-[#fbbf24];
-  }
+  .metric-green { @apply text-[#00d084]; }
+  .metric-red   { @apply text-[#ff4d4d]; }
+  .metric-blue  { @apply text-[#38bdf8]; }
+  .metric-amber { @apply text-[#fbbf24]; }
 
   .ticker-row {
     @apply border-b border-[#111e33] hover:bg-[#0f1e35] transition-colors duration-75 cursor-pointer;
-  }
-
-  .quality-bar {
-    @apply h-1 rounded-full bg-[#1e2d4a] overflow-hidden;
   }
 
   .btn-terminal {
@@ -105,7 +90,7 @@
   }
 
   .panel-tab {
-    @apply text-[11px] uppercase tracking-wider font-semibold px-4 py-2 border-b-2 border-transparent text-[#4a6080] hover:text-[#94b4d4] transition-colors;
+    @apply text-[11px] uppercase tracking-wider font-mono font-semibold px-4 py-2.5 border-b-2 border-transparent text-[#4a6080] hover:text-[#94b4d4] transition-colors cursor-pointer;
   }
 
   .panel-tab-active {
@@ -113,17 +98,98 @@
   }
 }
 
+/* ── Recharts overrides ── */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
   stroke: #1e2d4a !important;
-  stroke-opacity: 0.6;
+  stroke-opacity: 0.5;
 }
 .recharts-text {
   fill: #4a6080 !important;
   font-size: 10px;
+  font-family: ui-monospace, monospace;
 }
 .recharts-tooltip-wrapper .recharts-default-tooltip {
   background-color: #0d1526 !important;
   border: 1px solid #1e2d4a !important;
-  border-radius: 4px;
+  border-radius: 2px;
+}
+
+/* ── Marquee ticker ── */
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 60s linear infinite;
+}
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+/* ── Price flash animations ── */
+@keyframes flash-green {
+  0%   { background-color: transparent; }
+  25%  { background-color: rgba(0, 208, 132, 0.18); }
+  100% { background-color: transparent; }
+}
+@keyframes flash-red {
+  0%   { background-color: transparent; }
+  25%  { background-color: rgba(255, 77, 77, 0.18); }
+  100% { background-color: transparent; }
+}
+.flash-green { animation: flash-green 0.9s ease-out forwards; }
+.flash-red   { animation: flash-red 0.9s ease-out forwards; }
+
+/* ── Live feed entry slide-in ── */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.lead-entry-new {
+  animation: slide-down 0.35s ease-out forwards;
+}
+
+/* ── Blink for live indicators ── */
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+.blink { animation: blink-dot 1.4s ease-in-out infinite; }
+
+/* ── Command palette backdrop ── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.cmd-backdrop { animation: fade-in 0.15s ease-out forwards; }
+.cmd-panel    { animation: scale-in 0.18s ease-out forwards; }
+
+/* ── Notification slide-in ── */
+@keyframes slide-in-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.notif-panel { animation: slide-in-down 0.2s ease-out forwards; }
+
+/* ── Scanline overlay effect (ultra premium) ── */
+.scanlines::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
 }
