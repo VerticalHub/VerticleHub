@@ -16,8 +16,9 @@ import {
 
 interface Lead {
   id: number; firstName: string; lastName: string; email: string;
-  phoneNumber: string; state: string; interestedInACA: boolean;
-  interestedInMedicare: boolean; interestedInFinalExpense: boolean; createdAt: string;
+  phoneNumber: string; zipCode: string; state: string;
+  dateOfBirth?: string; hasMedicaidMedicareVA?: boolean;
+  interestedInACA: boolean; interestedInMedicare: boolean; interestedInFinalExpense: boolean; createdAt: string;
 }
 interface LeadListing {
   id: number; leadId: number; price: string; qualityScore: number;
@@ -77,6 +78,9 @@ export default function Admin() {
   const [newListing, setNewListing] = useState({ leadId: "", price: "", industry: "", geography: "" });
   const [sortField, setSortField] = useState("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [expandedLeadId, setExpandedLeadId] = useState<number | null>(null);
+  const [trendIndustry, setTrendIndustry] = useState("healthcare");
+  const [trendGeo, setTrendGeo] = useState("CA");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -87,7 +91,8 @@ export default function Admin() {
   const leads: Lead[] = leadsResp?.data || [];
 
   const { data: listingsResp, isLoading: loadingListings } = useQuery<any>({
-    queryKey: ["/api/lead-listings"],
+    queryKey: ["/api/lead-listings/all"],
+    queryFn: () => fetch("/api/lead-listings/all").then(r => r.json()),
     refetchInterval: 30000,
   });
   const listings: LeadListing[] = listingsResp?.data || [];
@@ -108,12 +113,13 @@ export default function Admin() {
   });
 
   const recordTrendMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/market-trends", {
-      industry: "healthcare", geography: "CA",
-      avgPrice: (20 + Math.random() * 30).toFixed(2),
-      volume: Math.floor(Math.random() * 100) + 50,
-      growthRate: (Math.random() * 20 - 10).toFixed(2),
-    }),
+    mutationFn: ({ industry, geography }: { industry: string; geography: string }) =>
+      apiRequest("POST", "/api/market-trends", {
+        industry, geography,
+        avgPrice: (20 + Math.random() * 40).toFixed(2),
+        volume: Math.floor(Math.random() * 100) + 50,
+        growthRate: (Math.random() * 20 - 10).toFixed(2),
+      }),
     onSuccess: () => {
       toast({ title: "TREND RECORDED", description: "Market data point saved." });
       queryClient.invalidateQueries({ queryKey: ["/api/market-trends"] });
@@ -405,23 +411,50 @@ export default function Admin() {
                       ) : leads.length === 0 ? (
                         <tr><td colSpan={7} className="text-center py-12 text-[#2a4060]">NO LEADS IN DATABASE</td></tr>
                       ) : leads.map((lead: Lead) => (
-                        <tr key={lead.id} className="ticker-row">
-                          <td className="px-3 py-2.5 text-[#4a6080]">#{lead.id}</td>
-                          <td className="px-3 py-2.5 text-[#c8daf0] font-semibold">{lead.firstName} {lead.lastName}</td>
-                          <td className="px-3 py-2.5 text-[#4a8090]">{lead.email}</td>
-                          <td className="px-3 py-2.5 text-[#4a6080]">{lead.phoneNumber}</td>
-                          <td className="px-3 py-2.5 text-[#38bdf8]">{lead.state}</td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex gap-1">
-                              {getInterests(lead).map(({ label, color }) => (
-                                <span key={label} className="text-[9px] px-1.5 py-0.5 rounded-sm border" style={{ color, borderColor: `${color}40`, backgroundColor: `${color}10` }}>
-                                  {label}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2.5 text-[#2a4060]">{new Date(lead.createdAt).toLocaleDateString()}</td>
-                        </tr>
+                        <>
+                          <tr key={lead.id}
+                            onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? null : lead.id)}
+                            className={`ticker-row cursor-pointer ${expandedLeadId === lead.id ? "bg-[#0d1e35] border-l-2 border-l-[#2563eb]" : ""}`}>
+                            <td className="px-3 py-2.5 text-[#4a6080]">#{lead.id}</td>
+                            <td className="px-3 py-2.5 text-[#c8daf0] font-semibold">{lead.firstName} {lead.lastName}</td>
+                            <td className="px-3 py-2.5 text-[#4a8090]">{lead.email}</td>
+                            <td className="px-3 py-2.5 text-[#4a6080]">{lead.phoneNumber}</td>
+                            <td className="px-3 py-2.5 text-[#38bdf8]">{lead.state}</td>
+                            <td className="px-3 py-2.5">
+                              <div className="flex gap-1">
+                                {getInterests(lead).map(({ label, color }) => (
+                                  <span key={label} className="text-[9px] px-1.5 py-0.5 rounded-sm border" style={{ color, borderColor: `${color}40`, backgroundColor: `${color}10` }}>
+                                    {label}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5 text-[#2a4060]">{new Date(lead.createdAt).toLocaleDateString()}</td>
+                          </tr>
+                          {expandedLeadId === lead.id && (
+                            <tr key={`${lead.id}-detail`} className="bg-[#070f1f]">
+                              <td colSpan={7} className="px-4 py-3 border-b border-[#111e33]">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px] font-mono">
+                                  {[
+                                    { label: "EMAIL",         value: lead.email },
+                                    { label: "PHONE",         value: lead.phoneNumber },
+                                    { label: "ZIP CODE",      value: lead.zipCode || "—" },
+                                    { label: "DATE OF BIRTH", value: lead.dateOfBirth || "—" },
+                                    { label: "ACA",           value: lead.interestedInACA ? "✓ Interested" : "—" },
+                                    { label: "MEDICARE",      value: lead.interestedInMedicare ? "✓ Interested" : "—" },
+                                    { label: "FINAL EXPENSE", value: lead.interestedInFinalExpense ? "✓ Interested" : "—" },
+                                    { label: "MEDICAID/VA",   value: lead.hasMedicaidMedicareVA ? "⚠ Has Coverage" : "None" },
+                                  ].map(({ label, value }) => (
+                                    <div key={label} className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm px-2.5 py-2">
+                                      <p className="terminal-label">{label}</p>
+                                      <p className="text-[#94b4d4] mt-0.5 text-[11px]">{value}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       ))}
                     </tbody>
                   </table>
@@ -579,94 +612,169 @@ export default function Admin() {
           )}
 
           {/* MARKET DATA TAB */}
-          {activeTab === "trends" && (
-            <div className="p-4 space-y-4">
-              {/* Chart */}
-              {trends.length > 0 && (
+          {activeTab === "trends" && (() => {
+            // Build multi-segment chart data indexed by sequential position per industry
+            const byIndustry: Record<string, number[]> = {};
+            trends.forEach((t: any) => {
+              const k = t.industry.toLowerCase();
+              if (!byIndustry[k]) byIndustry[k] = [];
+              byIndustry[k].push(parseFloat(t.avgPrice));
+            });
+            const maxLen = Math.max(...Object.values(byIndustry).map(v => v.length), 0);
+            const multiChart = Array.from({ length: maxLen }, (_, i) => ({
+              i: i + 1,
+              healthcare: byIndustry["healthcare"]?.[i] ?? null,
+              medicare:   byIndustry["medicare"]?.[i]   ?? null,
+              insurance:  byIndustry["insurance"]?.[i]  ?? null,
+            }));
+
+            // Per-segment summary stats
+            const segStats = ["healthcare", "medicare", "insurance"].map(seg => {
+              const pts = byIndustry[seg] || [];
+              const avg = pts.length ? pts.reduce((s, v) => s + v, 0) / pts.length : 0;
+              const last = pts[pts.length - 1] ?? 0;
+              const prev = pts[pts.length - 2] ?? last;
+              const chg = prev ? ((last - prev) / prev) * 100 : 0;
+              return { seg, avg, last, chg, count: pts.length };
+            });
+
+            return (
+              <div className="p-4 space-y-4">
+                {/* Segment summary stats */}
+                <div className="grid grid-cols-3 gap-3">
+                  {segStats.map(({ seg, avg, last, chg, count }) => {
+                    const color = seg === "healthcare" ? "#38bdf8" : seg === "medicare" ? "#a78bfa" : "#00d084";
+                    return (
+                      <div key={seg} className="terminal-card p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-mono font-bold uppercase" style={{ color }}>{seg}</span>
+                          <span className={`text-[10px] font-mono flex items-center gap-0.5 ${chg >= 0 ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
+                            {chg >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                            {Math.abs(chg).toFixed(1)}%
+                          </span>
+                        </div>
+                        <p className="text-2xl font-mono font-bold text-[#c8daf0]">${avg.toFixed(2)}</p>
+                        <p className="text-[9px] font-mono text-[#4a6080] mt-0.5">avg · {count} data pts · latest ${last.toFixed(2)}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Multi-segment chart */}
                 <div className="terminal-card">
                   <div className="terminal-header flex items-center justify-between">
-                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">AVG PRICE TREND — HEALTHCARE/CA</span>
-                    <button onClick={() => recordTrendMutation.mutate()}
-                      disabled={recordTrendMutation.isPending}
-                      className="btn-terminal flex items-center gap-1 text-[10px]">
-                      <Zap className="w-3 h-3" /> RECORD SAMPLE
-                    </button>
+                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">AVG PRICE BY SEGMENT — ALL INDUSTRIES</span>
+                    <div className="flex gap-3">
+                      {[["#38bdf8", "Healthcare"], ["#a78bfa", "Medicare"], ["#00d084", "Insurance"]].map(([c, l]) => (
+                        <div key={l} className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
+                          <span className="text-[9px] font-mono text-[#4a6080]">{l}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="p-4 h-48">
+                  <div className="p-4 h-52">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={trends.slice(-20).map((t: any, i: number) => ({
-                        i: i + 1, price: parseFloat(t.avgPrice), vol: t.volume,
-                        growth: parseFloat(t.growthRate)
-                      }))}>
-                        <defs>
-                          <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
+                      <LineChart data={multiChart}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="i" />
-                        <YAxis />
+                        <XAxis dataKey="i" tick={{ fontSize: 10, fill: "#4a6080" }} />
+                        <YAxis tick={{ fontSize: 10, fill: "#4a6080" }} />
                         <Tooltip content={<CustomTooltip />} />
-                        <Area type="monotone" dataKey="price" stroke="#fbbf24" fill="url(#trendGrad)" strokeWidth={2} name="Avg $" />
-                      </AreaChart>
+                        <Line type="monotone" dataKey="healthcare" stroke="#38bdf8" strokeWidth={2} dot={false} name="Healthcare $" connectNulls />
+                        <Line type="monotone" dataKey="medicare"   stroke="#a78bfa" strokeWidth={2} dot={false} name="Medicare $"   connectNulls />
+                        <Line type="monotone" dataKey="insurance"  stroke="#00d084" strokeWidth={2} dot={false} name="Insurance $"  connectNulls />
+                      </LineChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
-              )}
 
-              {/* Trends Table */}
-              <div className="terminal-card">
-                <div className="terminal-header flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">MARKET DATA FEED — {trends.length} RECORDS</span>
-                  <button onClick={() => recordTrendMutation.mutate()}
-                    disabled={recordTrendMutation.isPending}
-                    className="btn-terminal flex items-center gap-1 text-[10px]">
-                    <Zap className="w-3 h-3" /> + DATA POINT
-                  </button>
-                </div>
-                {trends.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-[#2a4060] font-mono text-sm mb-4">NO MARKET DATA RECORDED</p>
-                    <button onClick={() => recordTrendMutation.mutate()}
-                      className="btn-terminal flex items-center gap-2 mx-auto">
-                      <Zap className="w-3.5 h-3.5" /> RECORD FIRST DATA POINT
-                    </button>
+                {/* Record new data point */}
+                <div className="terminal-card">
+                  <div className="terminal-header">
+                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">RECORD MARKET DATA POINT</span>
                   </div>
-                ) : (
-                  <table className="w-full text-[11px] font-mono border-collapse">
-                    <thead className="sticky top-0 bg-[#050a14]">
-                      <tr className="border-b border-[#1e2d4a]">
-                        {["INDUSTRY", "STATE", "AVG PRICE", "VOLUME", "GROWTH RATE", "RECORDED"].map(h => (
-                          <th key={h} className="text-left px-4 py-2 text-[9px] tracking-widest text-[#4a6080] border-r border-[#111e33] last:border-r-0">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {trends.map((t: any) => {
-                        const growth = parseFloat(t.growthRate);
-                        return (
-                          <tr key={t.id} className="ticker-row">
-                            <td className="px-4 py-2.5 font-semibold text-[#38bdf8] uppercase">{t.industry}</td>
-                            <td className="px-4 py-2.5 text-[#94b4d4]">{t.geography}</td>
-                            <td className="px-4 py-2.5 text-[#00d084] font-bold">${parseFloat(t.avgPrice).toFixed(2)}</td>
-                            <td className="px-4 py-2.5 text-[#94b4d4]">{t.volume}</td>
-                            <td className="px-4 py-2.5">
-                              <span className={`flex items-center gap-1 font-bold ${growth >= 0 ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
-                                {growth >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                {Math.abs(growth).toFixed(2)}%
-                              </span>
-                            </td>
-                            <td className="px-4 py-2.5 text-[#2a4060]">{new Date(t.recordedAt).toLocaleString()}</td>
+                  <div className="p-4 flex flex-wrap gap-3 items-end">
+                    <div>
+                      <label className="terminal-label block mb-1.5">INDUSTRY</label>
+                      <select value={trendIndustry} onChange={e => setTrendIndustry(e.target.value)}
+                        className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                        {["healthcare", "medicare", "insurance", "final expense"].map(v => <option key={v} value={v}>{v.toUpperCase()}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="terminal-label block mb-1.5">STATE</label>
+                      <select value={trendGeo} onChange={e => setTrendGeo(e.target.value)}
+                        className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                        {["CA", "FL", "TX", "NY", "AZ", "GA", "IL"].map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => recordTrendMutation.mutate({ industry: trendIndustry, geography: trendGeo })}
+                        disabled={recordTrendMutation.isPending}
+                        className="btn-terminal flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5" />
+                        {recordTrendMutation.isPending ? "RECORDING…" : "RECORD SAMPLE"}
+                      </button>
+                      {["healthcare", "medicare", "insurance"].map(seg => (
+                        <button key={seg} onClick={() => recordTrendMutation.mutate({ industry: seg, geography: trendGeo })}
+                          disabled={recordTrendMutation.isPending}
+                          className="text-[9px] font-mono px-2 py-1.5 border border-[#1e2d4a] text-[#4a6080] hover:border-[#2a3d5a] hover:text-[#94b4d4] rounded-sm transition-colors">
+                          + {seg.slice(0, 4).toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trends raw data table */}
+                <div className="terminal-card">
+                  <div className="terminal-header">
+                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">RAW DATA FEED — {trends.length} RECORDS</span>
+                  </div>
+                  {trends.length === 0 ? (
+                    <div className="text-center py-10">
+                      <p className="text-[#2a4060] font-mono text-sm">NO MARKET DATA YET — RECORD A DATA POINT ABOVE</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-auto max-h-64">
+                      <table className="w-full text-[11px] font-mono border-collapse">
+                        <thead className="sticky top-0 bg-[#050a14]">
+                          <tr className="border-b border-[#1e2d4a]">
+                            {["INDUSTRY", "STATE", "AVG PRICE", "VOLUME", "GROWTH RATE", "RECORDED"].map(h => (
+                              <th key={h} className="text-left px-4 py-2 text-[9px] tracking-widest text-[#4a6080] border-r border-[#111e33] last:border-r-0">{h}</th>
+                            ))}
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
+                        </thead>
+                        <tbody>
+                          {trends.map((t: any) => {
+                            const growth = parseFloat(t.growthRate);
+                            return (
+                              <tr key={t.id} className="ticker-row">
+                                <td className="px-4 py-2 font-semibold uppercase"
+                                  style={{ color: t.industry === "medicare" ? "#a78bfa" : t.industry === "healthcare" ? "#38bdf8" : "#00d084" }}>
+                                  {t.industry}
+                                </td>
+                                <td className="px-4 py-2 text-[#94b4d4]">{t.geography}</td>
+                                <td className="px-4 py-2 text-[#00d084] font-bold">${parseFloat(t.avgPrice).toFixed(2)}</td>
+                                <td className="px-4 py-2 text-[#94b4d4]">{t.volume}</td>
+                                <td className="px-4 py-2">
+                                  <span className={`flex items-center gap-1 font-bold ${growth >= 0 ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
+                                    {growth >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                                    {Math.abs(growth).toFixed(2)}%
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 text-[#2a4060]">{new Date(t.recordedAt).toLocaleString()}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </>

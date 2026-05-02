@@ -1,67 +1,74 @@
 import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { AlertCircle, Home } from "lucide-react";
 import { Helmet } from "react-helmet";
 import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+import { AlertTriangle, ArrowLeft, Activity, BarChart2, Shield } from "lucide-react";
 
 export default function NotFound() {
   return (
     <>
       <Helmet>
-        <title>Page Not Found | HealthCare Connect</title>
-        <meta name="description" content="The page you're looking for could not be found. Please return to our homepage to find health insurance options and quotes." />
-        <meta name="robots" content="noindex, follow" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:title" content="Page Not Found | HealthCare Connect" />
-        <meta property="og:description" content="The page you're looking for could not be found. Please return to our homepage to find health insurance options and quotes." />
-        
-        {/* Twitter */}
-        <meta name="twitter:card" content="summary" />
-        <meta name="twitter:title" content="Page Not Found | HealthCare Connect" />
-        <meta name="twitter:description" content="The page you're looking for could not be found. Please return to our homepage to find health insurance options and quotes." />
-        
-        {/* Canonical Link */}
-        <link rel="canonical" href="https://healthcareconnect.com/404" />
+        <title>404 — Route Not Found | HealthLead Pro</title>
+        <meta name="robots" content="noindex, nofollow" />
       </Helmet>
-
       <Header />
-      
-      <main className="py-20 bg-gray-50 min-h-[70vh] flex items-center">
-        <div className="container mx-auto px-4">
-          <Card className="max-w-2xl mx-auto shadow-lg">
-            <CardContent className="pt-8 pb-8 px-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center text-red-600">
-                <AlertCircle className="w-10 h-10" />
+      <div className="min-h-screen bg-[#070d1a] text-[#c8daf0] flex items-center justify-center px-4">
+        <div className="max-w-lg w-full">
+          {/* Terminal card */}
+          <div className="terminal-card overflow-hidden">
+            <div className="terminal-header flex items-center gap-2">
+              <div className="flex gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#ff4d4d]" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#fbbf24]" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#00d084]" />
               </div>
-              
-              <h1 className="text-3xl font-heading font-bold text-gray-900 mb-4">
-                Page Not Found
-              </h1>
-              
-              <p className="text-xl text-gray-600 mb-4">
-                The page you're looking for doesn't exist or has been moved.
+              <span className="text-[9px] font-mono text-[#4a6080] tracking-widest ml-2">SYSTEM · ROUTE_RESOLVER</span>
+            </div>
+
+            <div className="p-8 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-sm bg-[#2e0a0a] border border-[#ff4d4d40] mb-6">
+                <AlertTriangle className="w-8 h-8 text-[#ff4d4d]" />
+              </div>
+
+              <div className="font-mono mb-2">
+                <span className="text-[72px] font-bold leading-none" style={{ color: "#1e2d4a" }}>4</span>
+                <span className="text-[72px] font-bold leading-none text-[#ff4d4d]">0</span>
+                <span className="text-[72px] font-bold leading-none" style={{ color: "#1e2d4a" }}>4</span>
+              </div>
+
+              <p className="text-[13px] font-mono font-bold text-[#c8daf0] mb-1 tracking-widest">ROUTE NOT FOUND</p>
+              <p className="text-[11px] font-mono text-[#4a6080] mb-8">
+                The requested path does not exist in this terminal session.
               </p>
-              
-              <p className="text-gray-600 mb-8">
-                Please return to our homepage to find affordable health insurance options and request personalized quotes.
-              </p>
-              
-              <Link href="/">
-                <Button className="bg-primary-600 hover:bg-primary-700 flex items-center gap-2">
-                  <Home size={18} />
-                  Return to Homepage
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+
+              {/* Quick nav */}
+              <div className="space-y-2 mb-6">
+                {[
+                  { href: "/leads",       label: "LEADS INTELLIGENCE", icon: Activity,  color: "#38bdf8" },
+                  { href: "/marketplace", label: "MARKETPLACE",        icon: BarChart2, color: "#00d084" },
+                  { href: "/admin",       label: "COMMAND CENTER",     icon: Shield,    color: "#a78bfa" },
+                ].map(({ href, label, icon: Icon, color }) => (
+                  <Link key={href} href={href}>
+                    <div className="flex items-center gap-3 px-4 py-2.5 bg-[#060e1c] border border-[#1e2d4a] rounded-sm hover:border-[#2563eb] hover:bg-[#0d1e35] transition-colors cursor-pointer group">
+                      <div className="w-6 h-6 rounded-sm flex items-center justify-center" style={{ backgroundColor: `${color}18` }}>
+                        <Icon className="w-3.5 h-3.5" style={{ color }} />
+                      </div>
+                      <span className="text-[11px] font-mono font-semibold text-[#4a6080] group-hover:text-[#94b4d4] transition-colors tracking-widest">
+                        {label}
+                      </span>
+                      <ArrowLeft className="w-3 h-3 text-[#2a4060] group-hover:text-[#4a6080] ml-auto rotate-180" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="text-[9px] font-mono text-[#1e2d4a] space-y-0.5">
+                <p>ERR: PATH_RESOLUTION_FAILED</p>
+                <p>CODE: 404 · PLATFORM: HEALTHLEAD_PRO</p>
+              </div>
+            </div>
+          </div>
         </div>
-      </main>
-      
-      <Footer />
+      </div>
     </>
   );
 }
