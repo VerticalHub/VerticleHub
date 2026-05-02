@@ -1,0 +1,140 @@
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
+import { Activity, Lock, User, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+export default function Login() {
+  const [, setLocation] = useLocation();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [tab, setTab] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+
+  const loginMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/auth/login", { username, password }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      setLocation("/leads");
+    },
+    onError: (err: any) => setError(err.message || "Invalid credentials"),
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/auth/register", { username, password, email }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      setLocation("/leads");
+    },
+    onError: (err: any) => setError(err.message || "Registration failed"),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (tab === "login") loginMutation.mutate();
+    else registerMutation.mutate();
+  };
+
+  const isPending = loginMutation.isPending || registerMutation.isPending;
+
+  return (
+    <div className="min-h-screen bg-[#070d1a] flex flex-col items-center justify-center p-4">
+      {/* Ambient glow */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#0ea5e9] opacity-[0.03] rounded-full blur-3xl" />
+      </div>
+
+      {/* Logo */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="w-9 h-9 rounded-sm bg-[#0ea5e9] flex items-center justify-center">
+          <Activity className="w-5 h-5 text-white" />
+        </div>
+        <div className="leading-none">
+          <span className="text-[18px] font-bold font-mono text-white tracking-tight">HEALTHLEAD</span>
+          <span className="text-[18px] font-bold font-mono text-[#0ea5e9] tracking-tight">PRO</span>
+        </div>
+      </div>
+
+      {/* Card */}
+      <div className="w-full max-w-sm bg-[#0d1526] border border-[#1e2d4a] rounded-sm shadow-2xl">
+        {/* Tabs */}
+        <div className="flex border-b border-[#1e2d4a]">
+          {(["login", "register"] as const).map(t => (
+            <button key={t} onClick={() => { setTab(t); setError(""); }}
+              className={`flex-1 py-3 text-[11px] font-mono tracking-widest transition-colors ${tab === t ? "text-[#38bdf8] border-b-2 border-[#38bdf8] -mb-px" : "text-[#4a6080] hover:text-[#94b4d4]"}`}>
+              {t === "login" ? "SIGN IN" : "REGISTER"}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">USERNAME</label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#2a4060]" />
+              <input
+                type="text" value={username} onChange={e => setUsername(e.target.value)}
+                placeholder="admin"
+                className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono pl-9 pr-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#1e2d4a]"
+                required
+              />
+            </div>
+          </div>
+
+          {tab === "register" && (
+            <div>
+              <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">EMAIL (OPTIONAL)</label>
+              <input
+                type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="user@example.com"
+                className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#1e2d4a]"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">PASSWORD</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#2a4060]" />
+              <input
+                type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono pl-9 pr-10 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#1e2d4a]"
+                required
+              />
+              <button type="button" onClick={() => setShowPw(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#2a4060] hover:text-[#94b4d4]">
+                {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 bg-[#1a0808] border border-[#ff4d4d40] rounded-sm px-3 py-2">
+              <AlertCircle className="w-3.5 h-3.5 text-[#ff4d4d] flex-shrink-0" />
+              <p className="text-[10px] font-mono text-[#ff4d4d]">{error}</p>
+            </div>
+          )}
+
+          <button type="submit" disabled={isPending}
+            className="w-full py-3 bg-[#0d1e3a] hover:bg-[#1a3a6b] border border-[#2563eb] text-[#38bdf8] font-mono font-bold text-[12px] rounded-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+            {isPending ? "AUTHENTICATING..." : tab === "login" ? "SIGN IN →" : "CREATE ACCOUNT →"}
+          </button>
+
+          {tab === "login" && (
+            <p className="text-center text-[9px] font-mono text-[#2a4060]">
+              Demo: <span className="text-[#38bdf8]">admin</span> / <span className="text-[#38bdf8]">admin123</span>
+            </p>
+          )}
+        </form>
+      </div>
+
+      <p className="mt-6 text-[9px] font-mono text-[#1e2d4a]">
+        HEALTHLEADPRO · HEALTHCARE LEAD INTELLIGENCE PLATFORM
+      </p>
+    </div>
+  );
+}

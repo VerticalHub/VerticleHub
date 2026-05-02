@@ -75,6 +75,8 @@ export default function Marketplace() {
   const [selectedListing, setSelectedListing] = useState<LeadListing | null>(null);
   const [pendingPurchaseId, setPendingPurchaseId] = useState<number | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [isDuplicate, setIsDuplicate] = useState(false);
+  const [isDNC, setIsDNC] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
   const userId = 1;
@@ -107,9 +109,21 @@ export default function Marketplace() {
     queryKey: [`/api/purchases/${userId}/detailed`],
     enabled: activeTab === "holdings",
   });
+  const { data: allPurchasesResp } = useQuery<any>({
+    queryKey: [`/api/purchases/${userId}/detailed`, "always"],
+    queryFn: () => fetch(`/api/purchases/${userId}/detailed`).then(r => r.json()),
+    staleTime: 30_000,
+  });
   const portfolio: PurchaseDetail[] = portfolioResp?.data || [];
+  const ownedLeadIds = new Set<number>((allPurchasesResp?.data || []).map((p: PurchaseDetail) => p.leadId).filter(Boolean));
 
   const pendingListing = listings.find(l => l.id === pendingPurchaseId) || null;
+  const openPurchaseModal = (listingId: number) => {
+    const listing = listings.find(l => l.id === listingId);
+    setIsDuplicate(listing ? ownedLeadIds.has(listing.leadId) : false);
+    setIsDNC(false); // server will block DNC — error handled in mutation
+    setPendingPurchaseId(listingId);
+  };
 
   const purchaseMutation = useMutation({
     mutationFn: (listingId: number) =>
@@ -186,8 +200,10 @@ export default function Marketplace() {
         listing={pendingListing}
         balance={balance}
         isPending={purchaseMutation.isPending}
+        isDuplicate={isDuplicate}
+        isDNC={isDNC}
         onConfirm={(id) => purchaseMutation.mutate(id)}
-        onClose={() => setPendingPurchaseId(null)}
+        onClose={() => { setPendingPurchaseId(null); setIsDuplicate(false); setIsDNC(false); }}
       />
 
       <div className="min-h-screen bg-[#070d1a] text-[#c8daf0]">
@@ -331,7 +347,7 @@ export default function Marketplace() {
                           <td className="px-3 py-2.5"><span className="text-[#00d084] font-bold">${parseFloat(l.price).toFixed(2)}</span></td>
                           <td className="px-3 py-2.5 text-[#2a4060]">{new Date(l.createdAt).toLocaleDateString()}</td>
                           <td className="px-3 py-2.5">
-                            <button onClick={e => { e.stopPropagation(); setPendingPurchaseId(l.id); }}
+                            <button onClick={e => { e.stopPropagation(); openPurchaseModal(l.id); }}
                               className="btn-buy text-[10px] flex items-center gap-1">
                               <ShoppingCart className="w-3 h-3" /> BUY
                             </button>
@@ -387,7 +403,7 @@ export default function Marketplace() {
                           </span>
                         </p>
                       </div>
-                      <button onClick={() => setPendingPurchaseId(selectedListing.id)}
+                      <button onClick={() => openPurchaseModal(selectedListing.id)}
                         className="w-full py-3 bg-[#0a2e1a] hover:bg-[#0d3d22] border border-[#00d084] text-[#00d084] font-mono font-bold text-sm rounded-sm transition-colors flex items-center justify-center gap-2">
                         <ShoppingCart className="w-4 h-4" /> PLACE ORDER
                       </button>

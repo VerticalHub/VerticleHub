@@ -6,17 +6,16 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  email: text("email").unique(),
+  role: text("role").notNull().default("agent"), // agent | manager | admin
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
-// New schema for leads
+// ── Leads ──────────────────────────────────────────────────────────────────────
 export const leads = pgTable("leads", {
   id: serial("id").primaryKey(),
   firstName: text("first_name").notNull(),
@@ -30,12 +29,22 @@ export const leads = pgTable("leads", {
   interestedInFinalExpense: boolean("interested_in_final_expense").default(false),
   dateOfBirth: text("date_of_birth"),
   hasMedicaidMedicareVA: boolean("has_medicaid_medicare_va").default(false),
-  createdAt: timestamp("created_at").defaultNow()
+  // TCPA compliance
+  tcpaConsent: boolean("tcpa_consent").default(false),
+  tcpaConsentDate: timestamp("tcpa_consent_date"),
+  tcpaConsentSource: text("tcpa_consent_source"), // web_form | phone | third_party
+  dnc: boolean("dnc").default(false), // Do Not Call
+  dncAddedAt: timestamp("dnc_added_at"),
+  // Aging
+  agingScore: integer("aging_score").default(100), // degrades over time, 0-100
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertLeadSchema = createInsertSchema(leads).omit({
   id: true,
   createdAt: true,
+  tcpaConsentDate: true,
+  dncAddedAt: true,
 });
 
 export const leadValidationSchema = insertLeadSchema.extend({
@@ -47,30 +56,23 @@ export const leadValidationSchema = insertLeadSchema.extend({
   state: z.string().min(1, "State is required"),
   dateOfBirth: z.string().optional(),
   hasMedicaidMedicareVA: z.boolean().optional(),
+  tcpaConsent: z.boolean().optional(),
+  tcpaConsentSource: z.string().optional(),
   interests: z.array(z.string()).min(1, "Select at least one interest"),
 }).refine((data) => {
-  // If interested in ACA, can't have Medicare/Medicaid/VA
-  if (data.interests.includes("ACA/Obamacare") && data.hasMedicaidMedicareVA) {
-    return false;
-  }
+  if (data.interests.includes("ACA/Obamacare") && data.hasMedicaidMedicareVA) return false;
   return true;
 }, {
   message: "ACA/Obamacare isn't available if you have Medicare, Medicaid, or VA coverage",
   path: ["hasMedicaidMedicareVA"]
 }).refine((data) => {
-  // If interested in Medicare, must be at least 64.5 years old
   if (data.interests.includes("Medicare") && data.dateOfBirth) {
     const dob = new Date(data.dateOfBirth);
     const today = new Date();
     let age = today.getFullYear() - dob.getFullYear();
     const monthDiff = today.getMonth() - dob.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-      age--;
-    }
-    // Check if they're at least 64.5 years old
-    if (age < 64 || (age === 64 && monthDiff < 6)) {
-      return false;
-    }
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
+    if (age < 64 || (age === 64 && monthDiff < 6)) return false;
   }
   return true;
 }, {
@@ -82,7 +84,7 @@ export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leads.$inferSelect;
 export type LeadFormData = z.infer<typeof leadValidationSchema>;
 
-// Credit System
+// ── Credit System ──────────────────────────────────────────────────────────────
 export const creditAccounts = pgTable("credit_accounts", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
@@ -111,16 +113,16 @@ export const creditPackages = pgTable("credit_packages", {
   createdAt: timestamp("created_at").defaultNow()
 });
 
-// Lead Resale Marketplace
+// ── Lead Resale Marketplace ────────────────────────────────────────────────────
 export const leadListings = pgTable("lead_listings", {
   id: serial("id").primaryKey(),
   leadId: integer("lead_id").notNull(),
   sellerId: integer("seller_id").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  qualityScore: integer("quality_score").notNull().default(100), // 0-100
+  qualityScore: integer("quality_score").notNull().default(100),
   timesResold: integer("times_resold").notNull().default(0),
-  industry: text("industry").notNull(), // "healthcare", "insurance", etc.
-  geography: text("geography").notNull(), // state or region
+  industry: text("industry").notNull(),
+  geography: text("geography").notNull(),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow()
@@ -140,17 +142,50 @@ export const leadQualityDecay = pgTable("lead_quality_decay", {
   leadId: integer("lead_id").notNull(),
   initialQuality: integer("initial_quality").notNull().default(100),
   currentQuality: integer("current_quality").notNull().default(100),
-  decayRate: decimal("decay_rate", { precision: 5, scale: 2 }).notNull().default("5.00"), // % per resale
+  decayRate: decimal("decay_rate", { precision: 5, scale: 2 }).notNull().default("5.00"),
   lastUpdated: timestamp("last_updated").defaultNow()
 });
 
-// AI Predictive Trends
+// ── Alerts ─────────────────────────────────────────────────────────────────────
+export const alerts = pgTable("alerts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: text("type").notNull(), // prime_lead | low_balance | follow_up | market_signal | purchase | dnc
+  title: text("title").notNull(),
+  body: text("body"),
+  leadId: integer("lead_id"),
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAlertSchema = createInsertSchema(alerts).omit({ id: true, createdAt: true });
+export type InsertAlert = z.infer<typeof insertAlertSchema>;
+export type Alert = typeof alerts.$inferSelect;
+
+// ── CRM Lead Activities ────────────────────────────────────────────────────────
+export const leadActivities = pgTable("lead_activities", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").notNull(),
+  userId: integer("user_id").notNull(),
+  type: text("type").notNull(), // call | email | note | disposition
+  disposition: text("disposition"), // contacted | voicemail | not_interested | converted | callback
+  notes: text("notes"),
+  followUpAt: timestamp("follow_up_at"),
+  duration: integer("duration"), // seconds, for calls
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertLeadActivitySchema = createInsertSchema(leadActivities).omit({ id: true, createdAt: true });
+export type InsertLeadActivity = z.infer<typeof insertLeadActivitySchema>;
+export type LeadActivity = typeof leadActivities.$inferSelect;
+
+// ── AI Predictive Trends ───────────────────────────────────────────────────────
 export const demandPredictions = pgTable("demand_predictions", {
   id: serial("id").primaryKey(),
   industry: text("industry").notNull(),
   geography: text("geography").notNull(),
-  predictedDemand: integer("predicted_demand").notNull(), // 0-100 scale
-  confidence: decimal("confidence", { precision: 5, scale: 2 }).notNull(), // 0-100%
+  predictedDemand: integer("predicted_demand").notNull(),
+  confidence: decimal("confidence", { precision: 5, scale: 2 }).notNull(),
   factors: json("factors").$type<{ seasonality: number; economic: number; regulatory: number; historical: number }>(),
   predictionDate: timestamp("prediction_date").defaultNow(),
   validUntil: timestamp("valid_until").notNull()
@@ -162,62 +197,31 @@ export const marketTrends = pgTable("market_trends", {
   geography: text("geography").notNull(),
   avgPrice: decimal("avg_price", { precision: 10, scale: 2 }).notNull(),
   volume: integer("volume").notNull(),
-  growthRate: decimal("growth_rate", { precision: 5, scale: 2 }).notNull(), // % change
+  growthRate: decimal("growth_rate", { precision: 5, scale: 2 }).notNull(),
   recordedAt: timestamp("recorded_at").defaultNow()
 });
 
-// Schema exports for new tables
-export const insertCreditAccountSchema = createInsertSchema(creditAccounts).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true
-});
+// ── Schema exports ─────────────────────────────────────────────────────────────
+export const insertCreditAccountSchema = createInsertSchema(creditAccounts).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCreditTransactionSchema = createInsertSchema(creditTransactions).omit({ id: true, createdAt: true });
+export const insertCreditPackageSchema = createInsertSchema(creditPackages).omit({ id: true, createdAt: true });
+export const insertLeadListingSchema = createInsertSchema(leadListings).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertLeadPurchaseSchema = createInsertSchema(leadPurchases).omit({ id: true, purchaseDate: true });
+export const insertDemandPredictionSchema = createInsertSchema(demandPredictions).omit({ id: true, predictionDate: true });
+export const insertMarketTrendSchema = createInsertSchema(marketTrends).omit({ id: true, recordedAt: true });
 
-export const insertCreditTransactionSchema = createInsertSchema(creditTransactions).omit({
-  id: true,
-  createdAt: true
-});
-
-export const insertCreditPackageSchema = createInsertSchema(creditPackages).omit({
-  id: true,
-  createdAt: true
-});
-
-export const insertLeadListingSchema = createInsertSchema(leadListings).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true
-});
-
-export const insertLeadPurchaseSchema = createInsertSchema(leadPurchases).omit({
-  id: true,
-  purchaseDate: true
-});
-
-export const insertDemandPredictionSchema = createInsertSchema(demandPredictions).omit({
-  id: true,
-  predictionDate: true
-});
-
-export const insertMarketTrendSchema = createInsertSchema(marketTrends).omit({
-  id: true,
-  recordedAt: true
-});
-
-// Type exports
+// ── Type exports ───────────────────────────────────────────────────────────────
 export type CreditAccount = typeof creditAccounts.$inferSelect;
 export type InsertCreditAccount = z.infer<typeof insertCreditAccountSchema>;
 export type CreditTransaction = typeof creditTransactions.$inferSelect;
 export type InsertCreditTransaction = z.infer<typeof insertCreditTransactionSchema>;
 export type CreditPackage = typeof creditPackages.$inferSelect;
 export type InsertCreditPackage = z.infer<typeof insertCreditPackageSchema>;
-
 export type LeadListing = typeof leadListings.$inferSelect;
 export type InsertLeadListing = z.infer<typeof insertLeadListingSchema>;
 export type LeadPurchase = typeof leadPurchases.$inferSelect;
 export type InsertLeadPurchase = z.infer<typeof insertLeadPurchaseSchema>;
 export type LeadQualityDecay = typeof leadQualityDecay.$inferSelect;
-
 export type DemandPrediction = typeof demandPredictions.$inferSelect;
 export type InsertDemandPrediction = z.infer<typeof insertDemandPredictionSchema>;
 export type MarketTrend = typeof marketTrends.$inferSelect;

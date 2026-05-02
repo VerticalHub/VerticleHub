@@ -15,7 +15,8 @@ import {
 interface Lead {
   id: number; firstName: string; lastName: string; email: string;
   phoneNumber: string; state: string; interestedInACA: boolean;
-  interestedInMedicare: boolean; interestedInFinalExpense: boolean; createdAt: string;
+  interestedInMedicare: boolean; interestedInFinalExpense: boolean;
+  tcpaConsent?: boolean; dnc?: boolean; agingScore?: number; createdAt: string;
 }
 
 const FIRST = ["James", "Maria", "Robert", "Linda", "Michael", "Susan", "David", "Karen", "John", "Nancy", "William", "Lisa"];
@@ -455,7 +456,7 @@ export default function Leads() {
                 <table className="w-full text-[11px] font-mono">
                   <thead>
                     <tr className="border-b border-[#1e2d4a]">
-                      {["ID", "NAME", "STATE", "INTERESTS", "DATE", "STATUS"].map(h => (
+                      {["ID", "NAME", "STATE", "AGING", "INTERESTS", "TCPA/DNC", "DATE"].map(h => (
                         <th key={h} className="text-left px-4 py-2 text-[9px] tracking-widest text-[#4a6080]">{h}</th>
                       ))}
                     </tr>
@@ -467,6 +468,8 @@ export default function Leads() {
                         lead.interestedInMedicare && { label: "Medicare", color: "#a78bfa" },
                         lead.interestedInFinalExpense && { label: "Final Exp", color: "#00d084" },
                       ].filter(Boolean) as { label: string; color: string }[];
+                      const hoursOld = Math.floor((Date.now() - new Date(lead.createdAt).getTime()) / 3_600_000);
+                      const ageColor = hoursOld < 4 ? "#00d084" : hoursOld < 24 ? "#fbbf24" : "#ff4d4d";
                       return (
                         <tr key={lead.id} className="ticker-row">
                           <td className="px-4 py-2.5 text-[#4a6080]">#{lead.id}</td>
@@ -475,6 +478,15 @@ export default function Leads() {
                             <span className="flex items-center gap-1 text-[#94b4d4]">
                               <MapPin className="w-2.5 h-2.5" />{lead.state}
                             </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-2.5 h-2.5" style={{ color: ageColor }} />
+                              <span className="text-[10px] font-mono font-semibold" style={{ color: ageColor }}>{hoursOld}h</span>
+                              {lead.agingScore != null && (
+                                <span className="text-[9px] font-mono text-[#2a4060]">· {lead.agingScore}</span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-2.5">
                             <div className="flex gap-1 flex-wrap">
@@ -486,12 +498,15 @@ export default function Leads() {
                               ))}
                             </div>
                           </td>
-                          <td className="px-4 py-2.5 text-[#2a4060]">{new Date(lead.createdAt).toLocaleDateString()}</td>
                           <td className="px-4 py-2.5">
-                            <span className="flex items-center gap-1 text-[#00d084] text-[9px]">
-                              <CheckCircle2 className="w-2.5 h-2.5" />CAPTURED
-                            </span>
+                            <div className="flex gap-1">
+                              {lead.tcpaConsent
+                                ? <span className="text-[9px] font-mono text-[#00d084] bg-[#00d08415] border border-[#00d08430] px-1 py-0.5 rounded-sm">TCPA ✓</span>
+                                : <span className="text-[9px] font-mono text-[#fbbf24] bg-[#fbbf2415] border border-[#fbbf2430] px-1 py-0.5 rounded-sm">NO CONSENT</span>}
+                              {lead.dnc && <span className="text-[9px] font-mono text-[#ff4d4d] bg-[#ff4d4d15] border border-[#ff4d4d30] px-1 py-0.5 rounded-sm">DNC</span>}
+                            </div>
                           </td>
+                          <td className="px-4 py-2.5 text-[#2a4060]">{new Date(lead.createdAt).toLocaleDateString()}</td>
                         </tr>
                       );
                     })}

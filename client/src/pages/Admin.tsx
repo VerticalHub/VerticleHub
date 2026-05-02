@@ -11,14 +11,21 @@ import {
 import {
   Users, TrendingUp, DollarSign, Package, Plus, ChevronUp, ChevronDown,
   Activity, Target, Shield, Zap, RefreshCw, ArrowUpRight, ArrowDownRight,
-  Eye, Radio, AlertCircle, BarChart2, Database
+  Eye, Radio, AlertCircle, BarChart2, Database, Download, Phone, Mail,
+  FileText, Clock, CheckCircle2, PhoneCall, ShieldAlert, ShieldCheck
 } from "lucide-react";
 
 interface Lead {
   id: number; firstName: string; lastName: string; email: string;
   phoneNumber: string; zipCode: string; state: string;
   dateOfBirth?: string; hasMedicaidMedicareVA?: boolean;
-  interestedInACA: boolean; interestedInMedicare: boolean; interestedInFinalExpense: boolean; createdAt: string;
+  interestedInACA: boolean; interestedInMedicare: boolean; interestedInFinalExpense: boolean;
+  tcpaConsent?: boolean; tcpaConsentSource?: string; dnc?: boolean; agingScore?: number;
+  createdAt: string;
+}
+interface LeadActivity {
+  id: number; leadId: number; userId: number; type: string;
+  disposition?: string; notes?: string; duration?: number; createdAt: string;
 }
 interface LeadListing {
   id: number; leadId: number; price: string; qualityScore: number;
@@ -48,6 +55,78 @@ const industryBreakdown = [
   { name: "Insurance", volume: 76, avgPrice: 22.6, quality: 79 },
   { name: "Final Exp", volume: 54, avgPrice: 31.8, quality: 83 },
 ];
+
+// ── Activity Feed (inline CRM panel) ──────────────────────────────────────────
+function ActivityFeed({ leadId }: { leadId: number }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ type: "call", disposition: "contacted", notes: "", duration: "" });
+
+  const { data: actResp, isLoading } = useQuery<any>({
+    queryKey: ["/api/leads", leadId, "activities"],
+    queryFn: () => fetch(`/api/leads/${leadId}/activities`).then(r => r.json()),
+  });
+  const activities: LeadActivity[] = actResp?.data || [];
+
+  const logMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", `/api/leads/${leadId}/activities`, { ...data, userId: 1, leadId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId, "activities"] });
+      setForm({ type: "call", disposition: "contacted", notes: "", duration: "" });
+      toast({ title: "ACTIVITY LOGGED" });
+    },
+  });
+
+  const actIcon = (type: string) => {
+    if (type === "call")  return <PhoneCall className="w-3 h-3 text-[#38bdf8]" />;
+    if (type === "email") return <Mail       className="w-3 h-3 text-[#a78bfa]" />;
+    if (type === "note")  return <FileText   className="w-3 h-3 text-[#fbbf24]" />;
+    return <CheckCircle2 className="w-3 h-3 text-[#00d084]" />;
+  };
+  const dispColor = (d?: string) => ({ converted: "#00d084", contacted: "#38bdf8", callback: "#fbbf24", not_interested: "#ff4d4d", voicemail: "#4a6080" }[d ?? ""] ?? "#4a6080");
+
+  return (
+    <div className="border-t border-[#1e2d4a] pt-3">
+      <p className="text-[9px] font-mono tracking-widest text-[#2a4060] mb-2">CRM ACTIVITY LOG</p>
+      {/* Timeline */}
+      {isLoading ? (
+        <div className="text-[9px] font-mono text-[#2a4060] mb-2">Loading...</div>
+      ) : activities.length === 0 ? (
+        <div className="text-[9px] font-mono text-[#1e2d4a] mb-2">No activities logged yet.</div>
+      ) : (
+        <div className="space-y-1.5 mb-3 max-h-28 overflow-y-auto">
+          {activities.map(a => (
+            <div key={a.id} className="flex items-start gap-2 text-[10px] font-mono">
+              <div className="mt-0.5 flex-shrink-0">{actIcon(a.type)}</div>
+              <div className="flex-1 min-w-0">
+                <span className="uppercase" style={{ color: dispColor(a.disposition) }}>{a.disposition || a.type}</span>
+                {a.notes && <span className="text-[#4a6080] ml-2">— {a.notes}</span>}
+              </div>
+              <span className="text-[#1e2d4a] flex-shrink-0 text-[9px]">{new Date(a.createdAt).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Log form */}
+      <div className="flex flex-wrap gap-2 items-end">
+        <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
+          className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1 rounded-sm focus:outline-none focus:border-[#2563eb]">
+          {["call","email","note","disposition"].map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
+        </select>
+        <select value={form.disposition} onChange={e => setForm(p => ({ ...p, disposition: e.target.value }))}
+          className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1 rounded-sm focus:outline-none focus:border-[#2563eb]">
+          {["contacted","voicemail","not_interested","converted","callback"].map(d => <option key={d} value={d}>{d.replace("_"," ").toUpperCase()}</option>)}
+        </select>
+        <input type="text" placeholder="Notes..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+          className="flex-1 min-w-32 bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#1e2d4a]" />
+        <button onClick={() => logMutation.mutate(form)} disabled={logMutation.isPending}
+          className="btn-terminal text-[10px] flex items-center gap-1">
+          <Plus className="w-3 h-3" /> LOG
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const MiniSparkline = ({ data, color }: { data: number[]; color: string }) => (
   <div className="h-8 w-20">
@@ -370,28 +449,32 @@ export default function Admin() {
               <div className="terminal-card">
                 <div className="terminal-header flex items-center justify-between">
                   <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">LEAD DATABASE — {leads.length} RECORDS</span>
-                  <span className="text-[9px] font-mono text-[#2a4060]">SORT: {sortField.toUpperCase()} {sortDir.toUpperCase()}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[9px] font-mono text-[#2a4060]">SORT: {sortField.toUpperCase()} {sortDir.toUpperCase()}</span>
+                    <a href="/api/export/leads" target="_blank" rel="noreferrer"
+                      className="btn-terminal flex items-center gap-1 text-[10px]">
+                      <Download className="w-3 h-3" /> CSV
+                    </a>
+                  </div>
                 </div>
                 <div className="overflow-auto">
                   <table className="w-full text-[11px] font-mono border-collapse">
                     <thead className="sticky top-0 bg-[#050a14] z-10">
                       <tr className="border-b border-[#1e2d4a]">
                         {[
-                          { label: "#", field: "id" },
-                          { label: "NAME", field: null },
-                          { label: "EMAIL", field: "email" },
-                          { label: "PHONE", field: null },
-                          { label: "STATE", field: "state" },
-                          { label: "INTERESTS", field: null },
+                          { label: "#",        field: "id"        },
+                          { label: "NAME",     field: null        },
+                          { label: "STATE",    field: "state"     },
+                          { label: "AGING",    field: null        },
+                          { label: "INTERESTS",field: null        },
+                          { label: "TCPA/DNC", field: null        },
                           { label: "CAPTURED", field: "createdAt" },
                         ].map(({ label, field }) => (
                           <th key={label} onClick={() => field && handleSort(field)}
                             className={`text-left px-3 py-2 text-[9px] tracking-widest text-[#4a6080] border-r border-[#111e33] last:border-r-0 ${field ? "cursor-pointer hover:text-[#94b4d4]" : ""}`}>
                             <div className="flex items-center gap-1">
                               {label}
-                              {field && sortField === field && (
-                                sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />
-                              )}
+                              {field && sortField === field && (sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
                             </div>
                           </th>
                         ))}
@@ -402,60 +485,87 @@ export default function Admin() {
                         Array.from({ length: 6 }).map((_, i) => (
                           <tr key={i} className="border-b border-[#111e33]">
                             {Array.from({ length: 7 }).map((_, j) => (
-                              <td key={j} className="px-3 py-2.5">
-                                <div className="h-3 bg-[#0d1526] rounded animate-pulse w-3/4" />
-                              </td>
+                              <td key={j} className="px-3 py-2.5"><div className="h-3 bg-[#0d1526] rounded animate-pulse w-3/4" /></td>
                             ))}
                           </tr>
                         ))
                       ) : leads.length === 0 ? (
                         <tr><td colSpan={7} className="text-center py-12 text-[#2a4060]">NO LEADS IN DATABASE</td></tr>
-                      ) : leads.map((lead: Lead) => (
-                        <>
-                          <tr key={lead.id}
-                            onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? null : lead.id)}
-                            className={`ticker-row cursor-pointer ${expandedLeadId === lead.id ? "bg-[#0d1e35] border-l-2 border-l-[#2563eb]" : ""}`}>
-                            <td className="px-3 py-2.5 text-[#4a6080]">#{lead.id}</td>
-                            <td className="px-3 py-2.5 text-[#c8daf0] font-semibold">{lead.firstName} {lead.lastName}</td>
-                            <td className="px-3 py-2.5 text-[#4a8090]">{lead.email}</td>
-                            <td className="px-3 py-2.5 text-[#4a6080]">{lead.phoneNumber}</td>
-                            <td className="px-3 py-2.5 text-[#38bdf8]">{lead.state}</td>
-                            <td className="px-3 py-2.5">
-                              <div className="flex gap-1">
-                                {getInterests(lead).map(({ label, color }) => (
-                                  <span key={label} className="text-[9px] px-1.5 py-0.5 rounded-sm border" style={{ color, borderColor: `${color}40`, backgroundColor: `${color}10` }}>
-                                    {label}
+                      ) : leads.map((lead: Lead) => {
+                        const hoursOld = Math.floor((Date.now() - new Date(lead.createdAt).getTime()) / 3_600_000);
+                        const ageColor = hoursOld < 4 ? "#00d084" : hoursOld < 24 ? "#fbbf24" : "#ff4d4d";
+                        return (
+                          <>
+                            <tr key={lead.id}
+                              onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? null : lead.id)}
+                              className={`ticker-row cursor-pointer ${expandedLeadId === lead.id ? "bg-[#0d1e35] border-l-2 border-l-[#2563eb]" : ""}`}>
+                              <td className="px-3 py-2.5 text-[#4a6080]">#{lead.id}</td>
+                              <td className="px-3 py-2.5 text-[#c8daf0] font-semibold">{lead.firstName} {lead.lastName}</td>
+                              <td className="px-3 py-2.5 text-[#38bdf8]">{lead.state}</td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="w-2.5 h-2.5" style={{ color: ageColor }} />
+                                  <span className="text-[10px] font-mono font-semibold" style={{ color: ageColor }}>
+                                    {hoursOld}h
                                   </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2.5 text-[#2a4060]">{new Date(lead.createdAt).toLocaleDateString()}</td>
-                          </tr>
-                          {expandedLeadId === lead.id && (
-                            <tr key={`${lead.id}-detail`} className="bg-[#070f1f]">
-                              <td colSpan={7} className="px-4 py-3 border-b border-[#111e33]">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px] font-mono">
-                                  {[
-                                    { label: "EMAIL",         value: lead.email },
-                                    { label: "PHONE",         value: lead.phoneNumber },
-                                    { label: "ZIP CODE",      value: lead.zipCode || "—" },
-                                    { label: "DATE OF BIRTH", value: lead.dateOfBirth || "—" },
-                                    { label: "ACA",           value: lead.interestedInACA ? "✓ Interested" : "—" },
-                                    { label: "MEDICARE",      value: lead.interestedInMedicare ? "✓ Interested" : "—" },
-                                    { label: "FINAL EXPENSE", value: lead.interestedInFinalExpense ? "✓ Interested" : "—" },
-                                    { label: "MEDICAID/VA",   value: lead.hasMedicaidMedicareVA ? "⚠ Has Coverage" : "None" },
-                                  ].map(({ label, value }) => (
-                                    <div key={label} className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm px-2.5 py-2">
-                                      <p className="terminal-label">{label}</p>
-                                      <p className="text-[#94b4d4] mt-0.5 text-[11px]">{value}</p>
-                                    </div>
+                                  {lead.agingScore != null && (
+                                    <span className="text-[9px] font-mono text-[#2a4060]">· {lead.agingScore}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex gap-1">
+                                  {getInterests(lead).map(({ label, color }) => (
+                                    <span key={label} className="text-[9px] px-1.5 py-0.5 rounded-sm border" style={{ color, borderColor: `${color}40`, backgroundColor: `${color}10` }}>{label}</span>
                                   ))}
                                 </div>
                               </td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex gap-1">
+                                  {lead.tcpaConsent
+                                    ? <span className="flex items-center gap-0.5 text-[9px] font-mono text-[#00d084] bg-[#00d08415] border border-[#00d08430] px-1.5 py-0.5 rounded-sm"><ShieldCheck className="w-2.5 h-2.5" /> TCPA</span>
+                                    : <span className="flex items-center gap-0.5 text-[9px] font-mono text-[#fbbf24] bg-[#fbbf2415] border border-[#fbbf2430] px-1.5 py-0.5 rounded-sm"><ShieldAlert className="w-2.5 h-2.5" /> NO CONSENT</span>
+                                  }
+                                  {lead.dnc && (
+                                    <span className="text-[9px] font-mono text-[#ff4d4d] bg-[#ff4d4d15] border border-[#ff4d4d30] px-1.5 py-0.5 rounded-sm">DNC</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-[#2a4060]">{new Date(lead.createdAt).toLocaleDateString()}</td>
                             </tr>
-                          )}
-                        </>
-                      ))}
+                            {expandedLeadId === lead.id && (
+                              <tr key={`${lead.id}-detail`}>
+                                <td colSpan={7} className="px-4 py-3 border-b border-[#111e33] bg-[#070f1f]">
+                                  {/* Contact + compliance grid */}
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-[10px] font-mono">
+                                    {[
+                                      { label: "EMAIL",         value: lead.email },
+                                      { label: "PHONE",         value: lead.phoneNumber },
+                                      { label: "ZIP / DOB",     value: `${lead.zipCode || "—"} / ${lead.dateOfBirth || "—"}` },
+                                      { label: "MEDICAID/VA",   value: lead.hasMedicaidMedicareVA ? "⚠ Has Coverage" : "None" },
+                                    ].map(({ label, value }) => (
+                                      <div key={label} className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm px-2.5 py-2">
+                                        <p className="terminal-label">{label}</p>
+                                        <p className="text-[#94b4d4] mt-0.5 text-[10px]">{value}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {/* TCPA row */}
+                                  <div className="flex items-center gap-3 mb-3 text-[9px] font-mono">
+                                    <span className="text-[#2a4060]">TCPA:</span>
+                                    {lead.tcpaConsent
+                                      ? <span className="text-[#00d084]">Consented via {lead.tcpaConsentSource || "unknown"}</span>
+                                      : <span className="text-[#fbbf24]">No consent recorded</span>}
+                                    {lead.dnc && <span className="text-[#ff4d4d] ml-4 font-bold">DO NOT CALL — DNC registered</span>}
+                                  </div>
+                                  {/* Activity feed inline */}
+                                  <ActivityFeed leadId={lead.id} />
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

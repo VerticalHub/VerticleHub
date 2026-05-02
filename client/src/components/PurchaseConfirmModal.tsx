@@ -1,19 +1,16 @@
-import { ShoppingCart, X, AlertTriangle, CheckCircle2, TrendingDown } from "lucide-react";
+import { ShoppingCart, X, AlertTriangle, CheckCircle2, TrendingDown, ShieldOff } from "lucide-react";
 
 interface Listing {
-  id: number;
-  industry: string;
-  geography: string;
-  qualityScore: number;
-  timesResold: number;
-  price: string;
-  isActive: boolean;
+  id: number; leadId?: number; industry: string; geography: string;
+  qualityScore: number; timesResold: number; price: string; isActive: boolean;
 }
 
 interface Props {
   listing: Listing | null;
   balance: number;
   isPending: boolean;
+  isDuplicate?: boolean;
+  isDNC?: boolean;
   onConfirm: (id: number) => void;
   onClose: () => void;
 }
@@ -21,12 +18,13 @@ interface Props {
 const qColor = (s: number) => s >= 85 ? "#00d084" : s >= 65 ? "#fbbf24" : "#ff4d4d";
 const qLabel = (s: number) => s >= 85 ? "PRIME" : s >= 65 ? "GOOD" : "AGED";
 
-export default function PurchaseConfirmModal({ listing, balance, isPending, onConfirm, onClose }: Props) {
+export default function PurchaseConfirmModal({ listing, balance, isPending, isDuplicate, isDNC, onConfirm, onClose }: Props) {
   if (!listing) return null;
 
   const price = parseFloat(listing.price);
   const remaining = balance - price;
   const canAfford = balance >= price;
+  const canPurchase = canAfford && !isDuplicate && !isDNC;
 
   return (
     <div
@@ -46,16 +44,38 @@ export default function PurchaseConfirmModal({ listing, balance, isPending, onCo
           </button>
         </div>
 
-        {/* Listing summary */}
         <div className="p-5 space-y-4">
+          {/* DNC warning */}
+          {isDNC && (
+            <div className="flex items-start gap-2 p-3 bg-[#1f0a0a] border border-[#ff4d4d60] rounded-sm">
+              <ShieldOff className="w-4 h-4 text-[#ff4d4d] flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[11px] font-mono font-bold text-[#ff4d4d]">DO NOT CALL — BLOCKED</p>
+                <p className="text-[10px] font-mono text-[#ff4d4d80] mt-0.5">This lead is on the DNC registry. Purchase is prohibited.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Duplicate ownership warning */}
+          {isDuplicate && !isDNC && (
+            <div className="flex items-start gap-2 p-3 bg-[#1a1400] border border-[#fbbf2460] rounded-sm">
+              <AlertTriangle className="w-4 h-4 text-[#fbbf24] flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[11px] font-mono font-bold text-[#fbbf24]">ALREADY IN YOUR PORTFOLIO</p>
+                <p className="text-[10px] font-mono text-[#fbbf2480] mt-0.5">You already own this lead. Duplicate purchases are blocked.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Listing summary */}
           <div className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm p-4">
             <p className="terminal-label mb-3">ORDER DETAILS</p>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Listing ID",  value: `#${listing.id}`,                  color: "#38bdf8"  },
-                { label: "Industry",    value: listing.industry.toUpperCase(),     color: "#94b4d4"  },
-                { label: "Geography",   value: listing.geography,                  color: "#94b4d4"  },
-                { label: "Times Resold",value: `${listing.timesResold}×`,          color: listing.timesResold > 2 ? "#ff4d4d" : "#fbbf24" },
+                { label: "Listing ID",   value: `#${listing.id}`,                 color: "#38bdf8"  },
+                { label: "Industry",     value: listing.industry.toUpperCase(),    color: "#94b4d4"  },
+                { label: "Geography",    value: listing.geography,                 color: "#94b4d4"  },
+                { label: "Times Resold", value: `${listing.timesResold}×`,         color: listing.timesResold > 2 ? "#ff4d4d" : "#fbbf24" },
               ].map(({ label, value, color }) => (
                 <div key={label}>
                   <p className="terminal-label">{label}</p>
@@ -110,13 +130,10 @@ export default function PurchaseConfirmModal({ listing, balance, isPending, onCo
             </div>
           </div>
 
-          {/* Warning if can't afford */}
-          {!canAfford && (
+          {!canAfford && !isDuplicate && !isDNC && (
             <div className="flex items-start gap-2 p-3 bg-[#1f0a0a] border border-[#ff4d4d40] rounded-sm">
               <AlertTriangle className="w-4 h-4 text-[#ff4d4d] flex-shrink-0 mt-0.5" />
-              <p className="text-[11px] font-mono text-[#ff4d4d]">
-                Insufficient credits. Fund your account to complete this order.
-              </p>
+              <p className="text-[11px] font-mono text-[#ff4d4d]">Insufficient credits. Fund your account to complete this order.</p>
             </div>
           )}
 
@@ -128,9 +145,9 @@ export default function PurchaseConfirmModal({ listing, balance, isPending, onCo
             </button>
             <button
               onClick={() => onConfirm(listing.id)}
-              disabled={!canAfford || isPending}
+              disabled={!canPurchase || isPending}
               className={`flex-1 py-2.5 font-mono text-[11px] font-bold rounded-sm transition-colors flex items-center justify-center gap-2 ${
-                canAfford
+                canPurchase
                   ? "bg-[#0a2e1a] hover:bg-[#0d3d22] border border-[#00d084] text-[#00d084] cursor-pointer"
                   : "bg-[#0d1526] border border-[#1e2d4a] text-[#2a4060] cursor-not-allowed"
               }`}>
@@ -139,11 +156,12 @@ export default function PurchaseConfirmModal({ listing, balance, isPending, onCo
                   <span className="w-3 h-3 rounded-full border-2 border-[#00d084] border-t-transparent animate-spin" />
                   PROCESSING…
                 </>
+              ) : isDNC ? (
+                <><ShieldOff className="w-3.5 h-3.5" /> BLOCKED</>
+              ) : isDuplicate ? (
+                <><AlertTriangle className="w-3.5 h-3.5" /> DUPLICATE</>
               ) : (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  EXECUTE ORDER
-                </>
+                <><CheckCircle2 className="w-3.5 h-3.5" /> EXECUTE ORDER</>
               )}
             </button>
           </div>

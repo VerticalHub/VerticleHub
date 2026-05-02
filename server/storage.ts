@@ -1,41 +1,40 @@
 import { 
   users, leads, creditAccounts, creditTransactions, creditPackages,
   leadListings, leadPurchases, leadQualityDecay, demandPredictions, marketTrends,
+  alerts, leadActivities,
   type User, type InsertUser, type Lead, type InsertLead,
   type CreditAccount, type InsertCreditAccount, type CreditTransaction, type InsertCreditTransaction,
   type CreditPackage, type InsertCreditPackage, type LeadListing, type InsertLeadListing,
   type LeadPurchase, type InsertLeadPurchase, type LeadQualityDecay,
-  type DemandPrediction, type InsertDemandPrediction, type MarketTrend, type InsertMarketTrend
+  type DemandPrediction, type InsertDemandPrediction, type MarketTrend, type InsertMarketTrend,
+  type Alert, type InsertAlert, type LeadActivity, type InsertLeadActivity,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 
 export interface PurchaseDetail {
-  purchaseId: number;
-  listingId: number;
-  buyerId: number;
-  pricePaid: string;
-  qualityAtPurchase: number;
-  purchaseDate: Date | null;
-  industry: string | null;
-  geography: string | null;
-  leadId: number | null;
-  firstName: string | null;
-  lastName: string | null;
-  state: string | null;
-  interestedInACA: boolean | null;
-  interestedInMedicare: boolean | null;
+  purchaseId: number; listingId: number; buyerId: number;
+  pricePaid: string; qualityAtPurchase: number; purchaseDate: Date | null;
+  industry: string | null; geography: string | null; leadId: number | null;
+  firstName: string | null; lastName: string | null; state: string | null;
+  interestedInACA: boolean | null; interestedInMedicare: boolean | null;
   interestedInFinalExpense: boolean | null;
 }
 
 export interface IStorage {
+  // Users / Auth
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+
+  // Leads
   createLead(lead: InsertLead): Promise<Lead>;
   getAllLeads(): Promise<Lead[]>;
   getLeadById(id: number): Promise<Lead | undefined>;
+  updateLeadAgingScore(leadId: number, score: number): Promise<void>;
+  markLeadDNC(leadId: number): Promise<void>;
 
+  // Credits
   getCreditAccount(userId: number): Promise<CreditAccount | undefined>;
   createCreditAccount(account: InsertCreditAccount): Promise<CreditAccount>;
   updateCreditBalance(userId: number, amount: string): Promise<void>;
@@ -44,6 +43,7 @@ export interface IStorage {
   getCreditPackages(): Promise<CreditPackage[]>;
   createCreditPackage(pkg: InsertCreditPackage): Promise<CreditPackage>;
 
+  // Marketplace
   createLeadListing(listing: InsertLeadListing): Promise<LeadListing>;
   getLeadListings(filters?: { industry?: string; geography?: string; minPrice?: string; maxPrice?: string }): Promise<LeadListing[]>;
   getAllLeadListings(): Promise<LeadListing[]>;
@@ -52,9 +52,23 @@ export interface IStorage {
   purchaseLead(purchase: InsertLeadPurchase): Promise<LeadPurchase>;
   getLeadPurchases(userId: number): Promise<LeadPurchase[]>;
   getLeadPurchasesDetailed(userId: number): Promise<PurchaseDetail[]>;
+  hasPurchasedLead(userId: number, leadId: number): Promise<boolean>;
   updateLeadQuality(leadId: number, newQuality: number): Promise<void>;
   getLeadQuality(leadId: number): Promise<LeadQualityDecay | undefined>;
 
+  // Alerts
+  createAlert(alert: InsertAlert): Promise<Alert>;
+  getUnreadAlerts(userId: number): Promise<Alert[]>;
+  getAllAlerts(userId: number): Promise<Alert[]>;
+  markAlertRead(alertId: number): Promise<void>;
+  markAllAlertsRead(userId: number): Promise<void>;
+
+  // CRM Activities
+  createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity>;
+  getLeadActivities(leadId: number): Promise<LeadActivity[]>;
+  getFollowUps(userId: number): Promise<LeadActivity[]>;
+
+  // AI / Market
   saveDemandPrediction(prediction: InsertDemandPrediction): Promise<DemandPrediction>;
   getDemandPredictions(industry?: string, geography?: string): Promise<DemandPrediction[]>;
   getLatestDemandPrediction(industry: string, geography: string): Promise<DemandPrediction | undefined>;
@@ -63,214 +77,210 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user ?? undefined;
+  // ── Users ──────────────────────────────────────────────────────────────────
+  async getUser(id: number) {
+    const [u] = await db.select().from(users).where(eq(users.id, id));
+    return u ?? undefined;
+  }
+  async getUserByUsername(username: string) {
+    const [u] = await db.select().from(users).where(eq(users.username, username));
+    return u ?? undefined;
+  }
+  async createUser(insertUser: InsertUser) {
+    const [u] = await db.insert(users).values(insertUser).returning();
+    return u;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user ?? undefined;
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
-  }
-
+  // ── Leads ──────────────────────────────────────────────────────────────────
   async createLead(insertLead: InsertLead): Promise<Lead> {
     const [lead] = await db.insert(leads).values({ ...insertLead, createdAt: new Date() }).returning();
     await db.insert(leadQualityDecay).values({
-      leadId: lead.id,
-      initialQuality: 100,
-      currentQuality: 100,
-      decayRate: "5.00",
+      leadId: lead.id, initialQuality: 100, currentQuality: 100, decayRate: "5.00",
     });
     return lead;
   }
-
-  async getAllLeads(): Promise<Lead[]> {
+  async getAllLeads() {
     return db.select().from(leads).orderBy(desc(leads.createdAt));
   }
-
-  async getLeadById(id: number): Promise<Lead | undefined> {
-    const [lead] = await db.select().from(leads).where(eq(leads.id, id));
-    return lead ?? undefined;
+  async getLeadById(id: number) {
+    const [l] = await db.select().from(leads).where(eq(leads.id, id));
+    return l ?? undefined;
+  }
+  async updateLeadAgingScore(leadId: number, score: number) {
+    await db.update(leads).set({ agingScore: score }).where(eq(leads.id, leadId));
+  }
+  async markLeadDNC(leadId: number) {
+    await db.update(leads).set({ dnc: true, dncAddedAt: new Date() }).where(eq(leads.id, leadId));
   }
 
-  // ── Credit System ──────────────────────────────────────────
-  async getCreditAccount(userId: number): Promise<CreditAccount | undefined> {
-    const [account] = await db.select().from(creditAccounts).where(eq(creditAccounts.userId, userId));
-    return account ?? undefined;
+  // ── Credits ────────────────────────────────────────────────────────────────
+  async getCreditAccount(userId: number) {
+    const [a] = await db.select().from(creditAccounts).where(eq(creditAccounts.userId, userId));
+    return a ?? undefined;
   }
-
-  async createCreditAccount(account: InsertCreditAccount): Promise<CreditAccount> {
-    const [newAccount] = await db.insert(creditAccounts).values(account).returning();
-    return newAccount;
+  async createCreditAccount(account: InsertCreditAccount) {
+    const [a] = await db.insert(creditAccounts).values(account).returning();
+    return a;
   }
-
-  async updateCreditBalance(userId: number, amount: string): Promise<void> {
-    await db
-      .update(creditAccounts)
+  async updateCreditBalance(userId: number, amount: string) {
+    await db.update(creditAccounts)
       .set({ balance: sql`${creditAccounts.balance} + ${amount}`, updatedAt: new Date() })
       .where(eq(creditAccounts.userId, userId));
   }
-
-  async addCreditTransaction(transaction: InsertCreditTransaction): Promise<CreditTransaction> {
+  async addCreditTransaction(transaction: InsertCreditTransaction) {
     const [tx] = await db.insert(creditTransactions).values(transaction).returning();
     return tx;
   }
-
-  async getCreditTransactions(userId: number): Promise<CreditTransaction[]> {
-    return db
-      .select().from(creditTransactions)
+  async getCreditTransactions(userId: number) {
+    return db.select().from(creditTransactions)
       .where(eq(creditTransactions.userId, userId))
-      .orderBy(desc(creditTransactions.createdAt))
-      .limit(50);
+      .orderBy(desc(creditTransactions.createdAt)).limit(50);
   }
-
-  async getCreditPackages(): Promise<CreditPackage[]> {
+  async getCreditPackages() {
     return db.select().from(creditPackages)
       .where(eq(creditPackages.isActive, true))
       .orderBy(creditPackages.credits);
   }
-
-  async createCreditPackage(packageData: InsertCreditPackage): Promise<CreditPackage> {
-    const [pkg] = await db.insert(creditPackages).values(packageData).returning();
-    return pkg;
+  async createCreditPackage(packageData: InsertCreditPackage) {
+    const [p] = await db.insert(creditPackages).values(packageData).returning();
+    return p;
   }
 
-  // ── Lead Marketplace ───────────────────────────────────────
-  async createLeadListing(listing: InsertLeadListing): Promise<LeadListing> {
-    const [newListing] = await db.insert(leadListings).values(listing).returning();
-    return newListing;
+  // ── Marketplace ────────────────────────────────────────────────────────────
+  async createLeadListing(listing: InsertLeadListing) {
+    const [l] = await db.insert(leadListings).values(listing).returning();
+    return l;
   }
-
-  // BUG FIX: always include isActive:true in the conditions array rather than
-  // calling .where() twice (which would overwrite the first constraint).
-  async getLeadListings(filters?: { industry?: string; geography?: string; minPrice?: string; maxPrice?: string }): Promise<LeadListing[]> {
+  async getLeadListings(filters?: { industry?: string; geography?: string; minPrice?: string; maxPrice?: string }) {
     const conditions = [eq(leadListings.isActive, true)];
-    if (filters) {
-      if (filters.industry)  conditions.push(eq(leadListings.industry, filters.industry));
-      if (filters.geography) conditions.push(eq(leadListings.geography, filters.geography));
-      if (filters.minPrice)  conditions.push(gte(leadListings.price, filters.minPrice));
-      if (filters.maxPrice)  conditions.push(lte(leadListings.price, filters.maxPrice));
-    }
-    return db
-      .select().from(leadListings)
-      .where(and(...conditions))
-      .orderBy(desc(leadListings.qualityScore));
+    if (filters?.industry)  conditions.push(eq(leadListings.industry, filters.industry));
+    if (filters?.geography) conditions.push(eq(leadListings.geography, filters.geography));
+    if (filters?.minPrice)  conditions.push(gte(leadListings.price, filters.minPrice));
+    if (filters?.maxPrice)  conditions.push(lte(leadListings.price, filters.maxPrice));
+    return db.select().from(leadListings).where(and(...conditions)).orderBy(desc(leadListings.qualityScore));
   }
-
-  async getAllLeadListings(): Promise<LeadListing[]> {
+  async getAllLeadListings() {
     return db.select().from(leadListings).orderBy(desc(leadListings.createdAt));
   }
-
-  async getLeadListingById(id: number): Promise<LeadListing | undefined> {
-    const [listing] = await db.select().from(leadListings).where(eq(leadListings.id, id));
-    return listing ?? undefined;
+  async getLeadListingById(id: number) {
+    const [l] = await db.select().from(leadListings).where(eq(leadListings.id, id));
+    return l ?? undefined;
   }
-
-  async updateLeadListing(id: number, updates: Partial<LeadListing>): Promise<void> {
+  async updateLeadListing(id: number, updates: Partial<LeadListing>) {
     await db.update(leadListings).set({ ...updates, updatedAt: new Date() }).where(eq(leadListings.id, id));
   }
-
-  async purchaseLead(purchase: InsertLeadPurchase): Promise<LeadPurchase> {
-    const [newPurchase] = await db.insert(leadPurchases).values(purchase).returning();
+  async purchaseLead(purchase: InsertLeadPurchase) {
+    const [p] = await db.insert(leadPurchases).values(purchase).returning();
     const listing = await this.getLeadListingById(purchase.listingId);
     if (listing) {
-      await this.updateLeadListing(purchase.listingId, {
-        timesResold: listing.timesResold + 1,
-        isActive: false,
-      });
+      await this.updateLeadListing(purchase.listingId, { timesResold: listing.timesResold + 1, isActive: false });
       await this.updateLeadQuality(listing.leadId, listing.qualityScore - 5);
     }
-    return newPurchase;
+    return p;
   }
-
-  async getLeadPurchases(userId: number): Promise<LeadPurchase[]> {
-    return db
-      .select().from(leadPurchases)
+  async getLeadPurchases(userId: number) {
+    return db.select().from(leadPurchases)
       .where(eq(leadPurchases.buyerId, userId))
       .orderBy(desc(leadPurchases.purchaseDate));
   }
-
   async getLeadPurchasesDetailed(userId: number): Promise<PurchaseDetail[]> {
-    const rows = await db
-      .select({
-        purchaseId:         leadPurchases.id,
-        listingId:          leadPurchases.listingId,
-        buyerId:            leadPurchases.buyerId,
-        pricePaid:          leadPurchases.price,
-        qualityAtPurchase:  leadPurchases.qualityAtPurchase,
-        purchaseDate:       leadPurchases.purchaseDate,
-        industry:           leadListings.industry,
-        geography:          leadListings.geography,
-        leadId:             leadListings.leadId,
-        firstName:          leads.firstName,
-        lastName:           leads.lastName,
-        state:              leads.state,
-        interestedInACA:    leads.interestedInACA,
-        interestedInMedicare: leads.interestedInMedicare,
-        interestedInFinalExpense: leads.interestedInFinalExpense,
-      })
-      .from(leadPurchases)
-      .leftJoin(leadListings, eq(leadPurchases.listingId, leadListings.id))
-      .leftJoin(leads, eq(leadListings.leadId, leads.id))
-      .where(eq(leadPurchases.buyerId, userId))
-      .orderBy(desc(leadPurchases.purchaseDate));
+    const rows = await db.select({
+      purchaseId: leadPurchases.id, listingId: leadPurchases.listingId,
+      buyerId: leadPurchases.buyerId, pricePaid: leadPurchases.price,
+      qualityAtPurchase: leadPurchases.qualityAtPurchase, purchaseDate: leadPurchases.purchaseDate,
+      industry: leadListings.industry, geography: leadListings.geography, leadId: leadListings.leadId,
+      firstName: leads.firstName, lastName: leads.lastName, state: leads.state,
+      interestedInACA: leads.interestedInACA, interestedInMedicare: leads.interestedInMedicare,
+      interestedInFinalExpense: leads.interestedInFinalExpense,
+    })
+    .from(leadPurchases)
+    .leftJoin(leadListings, eq(leadPurchases.listingId, leadListings.id))
+    .leftJoin(leads, eq(leadListings.leadId, leads.id))
+    .where(eq(leadPurchases.buyerId, userId))
+    .orderBy(desc(leadPurchases.purchaseDate));
     return rows as PurchaseDetail[];
   }
-
-  async updateLeadQuality(leadId: number, newQuality: number): Promise<void> {
-    await db
-      .update(leadQualityDecay)
+  async hasPurchasedLead(userId: number, leadId: number): Promise<boolean> {
+    const rows = await db.select({ id: leadPurchases.id })
+      .from(leadPurchases)
+      .leftJoin(leadListings, eq(leadPurchases.listingId, leadListings.id))
+      .where(and(eq(leadPurchases.buyerId, userId), eq(leadListings.leadId, leadId)))
+      .limit(1);
+    return rows.length > 0;
+  }
+  async updateLeadQuality(leadId: number, newQuality: number) {
+    await db.update(leadQualityDecay)
       .set({ currentQuality: Math.max(0, newQuality), lastUpdated: new Date() })
       .where(eq(leadQualityDecay.leadId, leadId));
   }
-
-  async getLeadQuality(leadId: number): Promise<LeadQualityDecay | undefined> {
+  async getLeadQuality(leadId: number) {
     const [q] = await db.select().from(leadQualityDecay).where(eq(leadQualityDecay.leadId, leadId));
     return q ?? undefined;
   }
 
-  // ── AI Predictive Trends ───────────────────────────────────
-  async saveDemandPrediction(prediction: InsertDemandPrediction): Promise<DemandPrediction> {
+  // ── Alerts ─────────────────────────────────────────────────────────────────
+  async createAlert(alert: InsertAlert): Promise<Alert> {
+    const [a] = await db.insert(alerts).values(alert).returning();
+    return a;
+  }
+  async getUnreadAlerts(userId: number): Promise<Alert[]> {
+    return db.select().from(alerts)
+      .where(and(eq(alerts.userId, userId), eq(alerts.read, false)))
+      .orderBy(desc(alerts.createdAt));
+  }
+  async getAllAlerts(userId: number): Promise<Alert[]> {
+    return db.select().from(alerts)
+      .where(eq(alerts.userId, userId))
+      .orderBy(desc(alerts.createdAt))
+      .limit(50);
+  }
+  async markAlertRead(alertId: number) {
+    await db.update(alerts).set({ read: true }).where(eq(alerts.id, alertId));
+  }
+  async markAllAlertsRead(userId: number) {
+    await db.update(alerts).set({ read: true }).where(eq(alerts.userId, userId));
+  }
+
+  // ── CRM Activities ─────────────────────────────────────────────────────────
+  async createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity> {
+    const [a] = await db.insert(leadActivities).values(activity).returning();
+    return a;
+  }
+  async getLeadActivities(leadId: number): Promise<LeadActivity[]> {
+    return db.select().from(leadActivities)
+      .where(eq(leadActivities.leadId, leadId))
+      .orderBy(desc(leadActivities.createdAt));
+  }
+  async getFollowUps(userId: number): Promise<LeadActivity[]> {
+    return db.select().from(leadActivities)
+      .where(and(eq(leadActivities.userId, userId), eq(leadActivities.disposition, "callback")))
+      .orderBy(desc(leadActivities.createdAt))
+      .limit(20);
+  }
+
+  // ── AI / Market ────────────────────────────────────────────────────────────
+  async saveDemandPrediction(prediction: InsertDemandPrediction) {
     const [p] = await db.insert(demandPredictions).values(prediction).returning();
     return p;
   }
-
-  // BUG FIX: include validUntil in same conditions array to avoid double .where()
-  async getDemandPredictions(industry?: string, geography?: string): Promise<DemandPrediction[]> {
+  async getDemandPredictions(industry?: string, geography?: string) {
     const conditions = [gte(demandPredictions.validUntil, new Date())];
     if (industry)  conditions.push(eq(demandPredictions.industry, industry));
     if (geography) conditions.push(eq(demandPredictions.geography, geography));
-    return db
-      .select().from(demandPredictions)
-      .where(and(...conditions))
-      .orderBy(desc(demandPredictions.predictionDate));
+    return db.select().from(demandPredictions).where(and(...conditions)).orderBy(desc(demandPredictions.predictionDate));
   }
-
-  async getLatestDemandPrediction(industry: string, geography: string): Promise<DemandPrediction | undefined> {
-    const [p] = await db
-      .select().from(demandPredictions)
-      .where(and(
-        eq(demandPredictions.industry, industry),
-        eq(demandPredictions.geography, geography),
-        gte(demandPredictions.validUntil, new Date()),
-      ))
-      .orderBy(desc(demandPredictions.predictionDate))
-      .limit(1);
+  async getLatestDemandPrediction(industry: string, geography: string) {
+    const [p] = await db.select().from(demandPredictions)
+      .where(and(eq(demandPredictions.industry, industry), eq(demandPredictions.geography, geography), gte(demandPredictions.validUntil, new Date())))
+      .orderBy(desc(demandPredictions.predictionDate)).limit(1);
     return p ?? undefined;
   }
-
-  async saveMarketTrend(trend: InsertMarketTrend): Promise<MarketTrend> {
+  async saveMarketTrend(trend: InsertMarketTrend) {
     const [t] = await db.insert(marketTrends).values(trend).returning();
     return t;
   }
-
-  async getMarketTrends(industry?: string, geography?: string, days?: number): Promise<MarketTrend[]> {
-    const conditions = [];
+  async getMarketTrends(industry?: string, geography?: string, days?: number) {
+    const conditions: any[] = [];
     if (industry)  conditions.push(eq(marketTrends.industry, industry));
     if (geography) conditions.push(eq(marketTrends.geography, geography));
     if (days) {

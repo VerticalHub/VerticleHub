@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, BarChart2, Shield, Bell, ChevronDown, Keyboard, X, CheckCircle2, AlertTriangle, TrendingUp, Info } from "lucide-react";
+import { Activity, BarChart2, Shield, Bell, ChevronDown, Keyboard, X, CheckCircle2, AlertTriangle, TrendingUp, Info, LogOut, DollarSign, Zap } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import CommandPalette from "./CommandPalette";
 
 interface TickerItem {
@@ -22,41 +24,90 @@ const BASE_TICKERS: TickerItem[] = [
   { label: "FILL RATE",   value: "94.2%",   change: "+0.6%",  up: true,  raw: 94.2  },
 ];
 
-interface Notification {
-  id: string; type: "fill" | "signal" | "alert" | "info"; title: string; body: string; time: string; read: boolean;
+interface Alert {
+  id: number; type: string; title: string; body: string | null; read: boolean; createdAt: string; leadId: number | null;
 }
 
-const NOTIFICATIONS: Notification[] = [
-  { id: "1", type: "fill",   title: "ORDER FILLED",    body: "Lead #17 purchased — $42.00 debited",     time: "2m ago",  read: false },
-  { id: "2", type: "signal", title: "AI SIGNAL",       body: "Medicare/FL demand spike +12% detected",  time: "8m ago",  read: false },
-  { id: "3", type: "alert",  title: "QUALITY DROP",    body: "3 listings below 60 score threshold",     time: "14m ago", read: true  },
-  { id: "4", type: "info",   title: "MARKET UPDATE",   body: "ACA enrollment period closes in 4 days",  time: "32m ago", read: true  },
-  { id: "5", type: "fill",   title: "ORDER FILLED",    body: "Lead #9 purchased — $28.50 debited",      time: "1h ago",  read: true  },
-];
-
-const notifIcon = (type: Notification["type"]) => {
-  if (type === "fill")   return <CheckCircle2 className="w-3.5 h-3.5 text-[#00d084]" />;
-  if (type === "signal") return <TrendingUp   className="w-3.5 h-3.5 text-[#a78bfa]" />;
-  if (type === "alert")  return <AlertTriangle className="w-3.5 h-3.5 text-[#fbbf24]" />;
+const alertIcon = (type: string) => {
+  if (type === "purchase")    return <CheckCircle2 className="w-3.5 h-3.5 text-[#00d084]" />;
+  if (type === "market_signal") return <TrendingUp  className="w-3.5 h-3.5 text-[#a78bfa]" />;
+  if (type === "low_balance") return <DollarSign   className="w-3.5 h-3.5 text-[#fbbf24]" />;
+  if (type === "prime_lead")  return <Zap          className="w-3.5 h-3.5 text-[#00d084]" />;
+  if (type === "dnc")         return <AlertTriangle className="w-3.5 h-3.5 text-[#ff4d4d]" />;
   return <Info className="w-3.5 h-3.5 text-[#38bdf8]" />;
 };
 
+function relTime(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 function isMarketOpen() {
   const now = new Date();
-  const h = now.getUTCHours() - 5; // EST approx
+  const h = now.getUTCHours() - 5;
   return h >= 8 && h < 18 && now.getUTCDay() >= 1 && now.getUTCDay() <= 5;
 }
 
 export default function Header() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [tickers, setTickers] = useState<TickerItem[]>(BASE_TICKERS);
   const [time, setTime] = useState(new Date());
   const [cmdOpen, setCmdOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState(NOTIFICATIONS);
   const notifRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
 
-  const unread = notifications.filter(n => !n.read).length;
+  // Live alerts from API — poll every 30s
+  const { data: alertsResp } = useQuery<any>({
+    queryKey: ["/api/alerts/unread"],
+    queryFn: () => fetch("/api/alerts/unread?userId=1").then(r => r.json()),
+    refetchInterval: 30_000,
+  });
+  const { data: allAlertsResp } = useQuery<any>({
+    queryKey: ["/api/alerts"],
+    queryFn: () => fetch("/api/alerts?userId=1").then(r => r.json()),
+    refetchInterval: 30_000,
+    enabled: notifOpen,
+  });
+  const unreadAlerts: Alert[] = alertsResp?.data || [];
+  const allAlerts: Alert[] = allAlertsResp?.data || unreadAlerts;
+  const unread = unreadAlerts.length;
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("PATCH", `/api/alerts/${id}/read`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts/unread"] });
+    },
+  });
+
+  const markAllMutation = useMutation({
+    mutationFn: () => apiRequest("PATCH", "/api/alerts/read-all", { userId: 1 }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts/unread"] });
+    },
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/auth/logout", {}),
+    onSuccess: () => {
+      queryClient.clear();
+      setLocation("/login");
+    },
+  });
+
+  const { data: meResp } = useQuery<any>({
+    queryKey: ["/api/auth/me"],
+    queryFn: () => fetch("/api/auth/me").then(r => r.json()),
+    staleTime: 60_000,
+  });
+  const me = meResp?.data;
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -93,15 +144,11 @@ export default function Header() {
 
   useEffect(() => {
     const handle = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setNotifOpen(false);
-      }
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
     };
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, []);
-
-  const markAllRead = () => setNotifications(n => n.map(x => ({ ...x, read: true })));
 
   const doubled = [...tickers, ...tickers];
 
@@ -112,31 +159,29 @@ export default function Header() {
   ];
 
   const marketOpen = isMarketOpen();
+  const displayAlerts = notifOpen ? allAlerts : unreadAlerts;
 
   return (
     <>
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
 
       <header className="sticky top-0 z-50 flex flex-col border-b border-[#1e2d4a] bg-[#070d1a]">
-        {/* ── Marquee Ticker Bar ── */}
+        {/* Ticker */}
         <div className="bg-[#050a14] border-b border-[#1a2a42] py-1 overflow-hidden select-none">
           <div className="ticker-track">
             {doubled.map((t, i) => (
               <div key={i} className="flex items-center gap-1.5 px-4 flex-shrink-0 border-r border-[#0f1a2e] last:border-r-0">
                 <span className="text-[9px] text-[#3a5070] font-mono tracking-widest whitespace-nowrap">{t.label}</span>
                 <span className="text-[11px] font-mono font-bold text-[#94b4d4] whitespace-nowrap tabular-nums">{t.value}</span>
-                <span className={`text-[10px] font-mono whitespace-nowrap tabular-nums ${t.up ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
-                  {t.change}
-                </span>
+                <span className={`text-[10px] font-mono whitespace-nowrap tabular-nums ${t.up ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>{t.change}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* ── Main Nav ── */}
+        {/* Nav */}
         <div className="flex items-center justify-between px-4 py-1.5">
           <div className="flex items-center gap-5">
-            {/* Logo */}
             <Link href="/leads">
               <div className="flex items-center gap-2 cursor-pointer flex-shrink-0">
                 <div className="w-7 h-7 rounded-sm bg-[#0ea5e9] flex items-center justify-center">
@@ -149,16 +194,13 @@ export default function Header() {
               </div>
             </Link>
 
-            {/* Nav tabs */}
             <nav className="flex items-center">
               {navItems.map(({ href, label, icon: Icon }) => {
                 const active = location === href || (href === "/leads" && location === "/");
                 return (
                   <Link key={href} href={href}>
                     <div className={`flex items-center gap-1.5 px-4 py-3.5 text-[11px] font-mono font-semibold tracking-widest border-b-2 transition-all cursor-pointer ${
-                      active
-                        ? "text-[#38bdf8] border-[#38bdf8]"
-                        : "text-[#4a6080] border-transparent hover:text-[#94b4d4] hover:border-[#1e3a5f]"
+                      active ? "text-[#38bdf8] border-[#38bdf8]" : "text-[#4a6080] border-transparent hover:text-[#94b4d4] hover:border-[#1e3a5f]"
                     }`}>
                       <Icon className="w-3.5 h-3.5" />
                       {label}
@@ -169,14 +211,11 @@ export default function Header() {
             </nav>
           </div>
 
-          {/* Right controls */}
           <div className="flex items-center gap-3">
             {/* Market status */}
             <div className="hidden md:flex items-center gap-1.5 border border-[#1e2d4a] rounded-sm px-2.5 py-1">
               <span className={`w-1.5 h-1.5 rounded-full ${marketOpen ? "bg-[#00d084] blink" : "bg-[#ff4d4d]"}`} />
-              <span className={`text-[9px] font-mono ${marketOpen ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
-                MKT {marketOpen ? "OPEN" : "CLOSED"}
-              </span>
+              <span className={`text-[9px] font-mono ${marketOpen ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>MKT {marketOpen ? "OPEN" : "CLOSED"}</span>
             </div>
 
             {/* Clock */}
@@ -184,21 +223,21 @@ export default function Header() {
               {time.toLocaleTimeString("en-US", { hour12: false })} EST
             </div>
 
-            {/* Cmd+K button */}
+            {/* Cmd+K */}
             <button onClick={() => setCmdOpen(true)}
               className="hidden md:flex items-center gap-1.5 border border-[#1e2d4a] rounded-sm px-2.5 py-1 hover:border-[#2563eb] hover:text-[#38bdf8] transition-colors text-[#4a6080]">
               <Keyboard className="w-3 h-3" />
               <span className="text-[9px] font-mono">⌘K</span>
             </button>
 
-            {/* Notification Bell */}
+            {/* Notification Bell — LIVE */}
             <div className="relative" ref={notifRef}>
               <button onClick={() => setNotifOpen(o => !o)}
                 className="relative p-1.5 hover:bg-[#0d1526] rounded-sm transition-colors">
                 <Bell className={`w-4 h-4 ${unread > 0 ? "text-[#94b4d4]" : "text-[#4a6080]"}`} />
                 {unread > 0 && (
                   <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#2563eb] rounded-full text-[8px] font-bold text-white flex items-center justify-center">
-                    {unread}
+                    {unread > 9 ? "9+" : unread}
                   </span>
                 )}
               </button>
@@ -209,7 +248,7 @@ export default function Header() {
                     <span className="text-[10px] font-mono tracking-widest text-[#4a6080]">ALERTS & NOTIFICATIONS</span>
                     <div className="flex items-center gap-2">
                       {unread > 0 && (
-                        <button onClick={markAllRead} className="text-[9px] font-mono text-[#2563eb] hover:text-[#38bdf8]">
+                        <button onClick={() => markAllMutation.mutate()} className="text-[9px] font-mono text-[#2563eb] hover:text-[#38bdf8]">
                           MARK ALL READ
                         </button>
                       )}
@@ -219,19 +258,21 @@ export default function Header() {
                     </div>
                   </div>
                   <div className="divide-y divide-[#0d1526] max-h-72 overflow-y-auto">
-                    {notifications.map(n => (
-                      <div key={n.id}
-                        className={`flex gap-3 px-4 py-3 hover:bg-[#0f1e35] transition-colors cursor-pointer ${!n.read ? "bg-[#0d1a2d]" : ""}`}
-                        onClick={() => setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))}>
-                        <div className="mt-0.5 flex-shrink-0">{notifIcon(n.type)}</div>
+                    {displayAlerts.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-[10px] font-mono text-[#2a4060]">NO ALERTS</div>
+                    ) : displayAlerts.map((a: Alert) => (
+                      <div key={a.id}
+                        className={`flex gap-3 px-4 py-3 hover:bg-[#0f1e35] transition-colors cursor-pointer ${!a.read ? "bg-[#0d1a2d]" : ""}`}
+                        onClick={() => !a.read && markReadMutation.mutate(a.id)}>
+                        <div className="mt-0.5 flex-shrink-0">{alertIcon(a.type)}</div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <p className="text-[11px] font-mono font-semibold text-[#c8daf0]">{n.title}</p>
-                            <span className="text-[9px] font-mono text-[#2a4060] flex-shrink-0">{n.time}</span>
+                            <p className="text-[11px] font-mono font-semibold text-[#c8daf0]">{a.title}</p>
+                            <span className="text-[9px] font-mono text-[#2a4060] flex-shrink-0">{relTime(a.createdAt)}</span>
                           </div>
-                          <p className="text-[10px] font-mono text-[#4a6080] mt-0.5 truncate">{n.body}</p>
+                          <p className="text-[10px] font-mono text-[#4a6080] mt-0.5 truncate">{a.body}</p>
                         </div>
-                        {!n.read && <div className="w-1.5 h-1.5 bg-[#2563eb] rounded-full flex-shrink-0 mt-1.5" />}
+                        {!a.read && <div className="w-1.5 h-1.5 bg-[#2563eb] rounded-full flex-shrink-0 mt-1.5" />}
                       </div>
                     ))}
                   </div>
@@ -244,13 +285,18 @@ export default function Header() {
               )}
             </div>
 
-            {/* User chip */}
-            <div className="flex items-center gap-2 bg-[#0d1526] border border-[#1e2d4a] rounded-sm px-3 py-1.5 cursor-pointer hover:border-[#2563eb] transition-colors">
+            {/* User chip with logout */}
+            <div className="flex items-center gap-2 bg-[#0d1526] border border-[#1e2d4a] rounded-sm px-3 py-1.5 cursor-pointer hover:border-[#2563eb] transition-colors group relative">
               <div className="w-5 h-5 rounded-full bg-[#1a3a6b] flex items-center justify-center">
-                <span className="text-[10px] font-bold text-[#38bdf8]">U</span>
+                <span className="text-[10px] font-bold text-[#38bdf8]">{me?.username?.[0]?.toUpperCase() || "U"}</span>
               </div>
-              <span className="text-[11px] font-mono text-[#94b4d4]">USER #1</span>
-              <ChevronDown className="w-3 h-3 text-[#4a6080]" />
+              <span className="text-[11px] font-mono text-[#94b4d4]">{me?.username?.toUpperCase() || "USER #1"}</span>
+              <span className="text-[9px] font-mono text-[#2a4060] hidden group-hover:inline">·</span>
+              <button onClick={() => logoutMutation.mutate()}
+                className="hidden group-hover:flex items-center gap-1 text-[9px] font-mono text-[#4a6080] hover:text-[#ff4d4d] transition-colors"
+                title="Sign out">
+                <LogOut className="w-3 h-3" />
+              </button>
             </div>
           </div>
         </div>
