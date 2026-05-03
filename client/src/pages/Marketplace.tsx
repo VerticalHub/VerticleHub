@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
 import PurchaseConfirmModal from "@/components/PurchaseConfirmModal";
 import ScoreBadge from "@/components/ScoreBadge";
+import LeadDetailModal from "@/components/LeadDetailModal";
 import {
   BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
@@ -13,7 +14,7 @@ import {
   ShoppingCart, TrendingUp, Star, Award, AlertTriangle, Package,
   DollarSign, Filter, Search, Bell, Heart, HeartOff, BellOff, BellRing,
   ArrowUpDown, Zap, X, SlidersHorizontal, ChevronDown, ChevronUp, RotateCcw,
-  Download,
+  Download, Eye,
 } from "lucide-react";
 
 const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
@@ -132,6 +133,9 @@ export default function Marketplace() {
   const [filterGeo, setFG]        = useState("");
   const [sortBy, setSortBy]       = useState<"quality"|"price"|"value"|"featured"|"score"|"newest"|"oldest">("featured");
   const [confirmListing, setConfirm] = useState<any>(null);
+  const [detailListing, setDetailListing] = useState<any>(null);
+  const [detailPurchase, setDetailPurchase] = useState<any>(null);
+  const [detailIsOwned, setDetailIsOwned] = useState(false);
   const [alertForm, setAlertForm] = useState({ industry: "medicare", geography: "FL", targetPrice: "" });
   const [showAlertForm, setShowAlertForm] = useState(false);
 
@@ -830,21 +834,29 @@ export default function Marketplace() {
                             </div>
                           </td>
                           <td className="px-3 py-3">
-                            {owned ? (
-                              <span className="text-[10px] font-mono text-[#4a6080]">OWNED</span>
-                            ) : (
+                            <div className="flex items-center gap-2">
                               <button
-                                onClick={() => setConfirm(l)}
-                                disabled={!canAfford}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono font-bold rounded-sm transition-colors whitespace-nowrap ${
-                                  canAfford
-                                    ? "bg-[#0d1e3a] border border-[#2563eb] text-[#38bdf8] hover:bg-[#1a3a6b]"
-                                    : "bg-[#0a0a0a] border border-[#2a3040] text-[#3a4050] cursor-not-allowed"
-                                }`}>
-                                <ShoppingCart className="w-3 h-3" />
-                                BUY ${l.price}
+                                onClick={() => { setDetailListing(l); setDetailIsOwned(owned); setDetailPurchase(null); }}
+                                className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-mono text-[#4a6080] hover:text-[#38bdf8] border border-[#1e2d4a] hover:border-[#2563eb40] bg-[#060e1c] rounded-sm transition-colors"
+                                title="View lead details">
+                                <Eye className="w-3 h-3" />
                               </button>
-                            )}
+                              {owned ? (
+                                <span className="text-[10px] font-mono text-[#4a6080]">OWNED</span>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirm(l)}
+                                  disabled={!canAfford}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono font-bold rounded-sm transition-colors whitespace-nowrap ${
+                                    canAfford
+                                      ? "bg-[#0d1e3a] border border-[#2563eb] text-[#38bdf8] hover:bg-[#1a3a6b]"
+                                      : "bg-[#0a0a0a] border border-[#2a3040] text-[#3a4050] cursor-not-allowed"
+                                  }`}>
+                                  <ShoppingCart className="w-3 h-3" />
+                                  BUY ${l.price}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1039,16 +1051,22 @@ export default function Marketplace() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[#1e2d4a]">
-                      {["LEAD","NAME","STATE","INDUSTRY","GEO","PRICE PAID","QUALITY","DATE"].map(h => (
+                      {["LEAD","NAME","STATE","INDUSTRY","GEO","PRICE PAID","QUALITY","DATE",""].map(h => (
                         <th key={h} className="px-3 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070] whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#0a1120]">
                     {purchases.length === 0 ? (
-                      <tr><td colSpan={8} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO PURCHASES YET</td></tr>
+                      <tr><td colSpan={9} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO PURCHASES YET</td></tr>
                     ) : purchases.map((p: any) => (
-                      <tr key={p.purchaseId} className="hover:bg-[#0a1628] transition-colors">
+                      <tr key={p.purchaseId} className="hover:bg-[#0a1628] transition-colors cursor-pointer group"
+                        onClick={() => {
+                          const listing = allListings.find((l: any) => l.leadId === p.leadId);
+                          setDetailListing(listing ?? { leadId: p.leadId, industry: p.industry, geography: p.geography, price: p.pricePaid });
+                          setDetailPurchase(p);
+                          setDetailIsOwned(true);
+                        }}>
                         <td className="px-3 py-3 text-[11px] font-mono text-[#4a6080] num">#{p.leadId}</td>
                         <td className="px-3 py-3 text-[11px] font-mono font-semibold text-[#c8daf0]">
                           {p.firstName} {p.lastName}
@@ -1064,6 +1082,9 @@ export default function Marketplace() {
                         </td>
                         <td className="px-3 py-3 text-[9px] font-mono text-[#2a4060]">
                           {p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString() : "—"}
+                        </td>
+                        <td className="px-3 py-3">
+                          <Eye className="w-3.5 h-3.5 text-[#2a4060] group-hover:text-[#38bdf8] transition-colors" />
                         </td>
                       </tr>
                     ))}
@@ -1168,6 +1189,17 @@ export default function Marketplace() {
           </div>
         )}
       </main>
+
+      {/* Lead Detail Modal */}
+      {detailListing && (
+        <LeadDetailModal
+          leadId={detailListing.leadId}
+          listing={detailListing}
+          purchase={detailPurchase}
+          isOwned={detailIsOwned}
+          onClose={() => { setDetailListing(null); setDetailPurchase(null); }}
+        />
+      )}
     </div>
   );
 }
