@@ -3,8 +3,22 @@ Allow: /
 Allow: /login
 Allow: /home
 Allow: /marketplace
+Allow: /sell
 Disallow: /admin
 Disallow: /api/
+
+# LLMs
+User-agent: GPTBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Googlebot
+Allow: /
 
 # Sitemap
 Sitemap: https://www.leadhealth.co/sitemap.xml

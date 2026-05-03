@@ -1,50 +1,103 @@
 # LeadHealth
 
-> Healthcare lead generation, resale marketplace, and AI demand intelligence platform for insurance agents and agencies.
+> The live exchange marketplace for buying and selling verified healthcare leads and calls — built for insurance agents and agencies.
 
-LeadHealth (www.leadhealth.co) is a B2B SaaS platform that enables health insurance professionals to generate, buy, sell, and manage verified consumer leads for ACA (Affordable Care Act), Medicare, and Final Expense insurance products.
+Website: https://www.leadhealth.co
 
-## Platform Overview
+## What Is LeadHealth?
 
-LeadHealth provides a full-stack lead lifecycle solution:
+LeadHealth is the stock market for healthcare leads and calls. Just like a financial exchange matches buyers and sellers of securities in real time, LeadHealth connects insurance agents who generate consumer leads with agents and agencies who need them — at transparent, market-driven prices.
 
-- **Lead Generation** — TCPA-compliant intake forms capture consumer intent data including name, contact info, ZIP code, state, age, income, household size, insurance interest type, and consent timestamp.
-- **Lead Scoring** — Proprietary quality scoring algorithm (0–100) evaluates each lead across TCPA consent, interest type, age bracket, recency, state demand, income fit, and data completeness. Tiers: PRIME (≥80), GOOD (≥60), FAIR (≥40), LOW (<40).
-- **Lead Marketplace** — Agents and agencies list scored leads for sale; buyers browse, filter, and purchase leads using an in-platform credit system.
-- **Pipeline CRM** — Tracks leads through statuses: New → Contacted → Qualified → Converted → Archived, with full activity logging.
-- **AI Demand Intelligence** — Forecasts lead demand by state and insurance type using market trend data and predictive modeling.
-- **Credit Economy** — Buyers purchase credit packages; all marketplace transactions settle in credits with full ledger history.
-- **Referral Program** — Agents earn credits for referring new users via unique referral codes.
-- **Admin Console** — Full platform management: user roles, lead ingestion, listing control, credit management, demand predictions, export tools.
+Every lead on the platform is a real consumer who has expressed interest in health insurance coverage (ACA/Obamacare, Medicare Advantage, or Final Expense/life insurance) and provided explicit TCPA consent.
+
+## How It Works
+
+**For sellers (lead generators):**
+- Generate leads via the TCPA-compliant intake form at /home
+- Each lead is automatically scored 0–100 by the LeadHealth scoring engine
+- List scored leads on the marketplace at your chosen price
+- Credits are deposited to your account on each sale
+
+**For buyers (agents and agencies):**
+- Browse the live marketplace at /marketplace — filter by state, insurance type, score tier, and price
+- Purchase leads instantly using platform credits
+- Track purchased leads through the CRM pipeline (New → Contacted → Qualified → Converted)
+- Set price alerts to be notified when a listing drops to your target price
+
+**The Exchange:**
+- Real-time pricing driven by supply, demand, and lead quality score
+- AI demand forecasting shows which states and insurance types are trending
+- Market trend data and heat maps guide buying and selling strategy
+- Ticker-style live feed of marketplace activity
+
+## Lead Scoring
+
+Each lead is assigned a quality score (0–100) across seven dimensions:
+
+| Factor | Max Points | Description |
+|---|---|---|
+| TCPA Consent | 25 | Binary — consented or not |
+| Interest Type | 20 | Medicare=13, Final Expense=10, ACA=8; multi-interest bonus |
+| Age Bracket | 15 | Age-to-product fit (Medicare: 65+, ACA: 26–54) |
+| Recency | 15 | <6hr=15, <24hr=13, <7d=8, <30d=5, <90d=2 |
+| State Demand | 10 | High-demand states (FL, CA, NY, TX, AZ) score higher |
+| Income Fit | 8 | ACA: 100–400% FPL; FE: $18k–90k; Medicare: low-income |
+| Completeness | 7 | DOB, income, household size, source quality, Medicaid status |
+
+**Score Tiers:**
+- PRIME (≥80) — green — highest quality, fastest to contact
+- GOOD (≥60) — amber — solid leads with good conversion potential
+- FAIR (≥40) — orange — usable but lower urgency
+- LOW (<40) — red — high-risk or incomplete data
+
+## Credit Economy
+
+LeadHealth runs on an in-platform credit system — similar to tokens on a trading platform:
+- Buyers purchase credit packages to fund marketplace transactions
+- Sellers receive credits when their listings sell
+- Full transaction ledger and credit history available in the dashboard
+- Credits can be earned through the referral program
+
+## Referral Program
+
+Agents earn bonus credits for referring new users to the platform via a unique referral code. Referral activity is tracked and rewarded automatically.
+
+## Platform Intelligence
+
+- **Demand Forecasting** — AI-generated predictions of lead demand by state and insurance type
+- **Market Trends** — State-level supply/demand and pricing data
+- **Lead Aging** — Quality scores decay automatically over time (cron job every 15 minutes) reflecting real-world urgency
+- **Price Alerts** — Watchlist triggers notify buyers when a listing hits their target price
+- **Watchlist** — Save listings to monitor before purchasing
+
+## Insurance Products Covered
+
+- **ACA / Obamacare** — Affordable Care Act marketplace plans; premium subsidy and tax credit qualification
+- **Medicare Advantage** — Medicare Part C supplemental plan leads; 65+ age group
+- **Final Expense** — Whole life/burial insurance leads; income-qualified consumers
 
 ## Target Users
 
-- Health insurance agents (independent and agency-employed)
-- Insurance agency managers
-- Lead aggregators and resellers
-- ACA, Medicare Advantage, and Final Expense carriers
+- Independent health insurance agents
+- Insurance agency managers and team leads
+- Lead aggregators and wholesalers
+- Regional insurance carriers and FMOs (Field Marketing Organizations)
 
-## Key Entities
+## Technology Stack
 
-- **Leads** — Consumer records with demographics, insurance interests, TCPA consent, and quality score
-- **Lead Listings** — Priced marketplace entries wrapping a lead
-- **Lead Purchases** — Completed buyer transactions
-- **Credits** — In-platform currency for marketplace transactions
-- **Referrals** — Agent-to-agent referral tracking with credit rewards
-- **Alerts** — Real-time system notifications for marketplace activity
-- **Price Alerts** — Watchlist triggers when a listing drops below a target price
-- **Market Trends** — State-level demand and pricing data for forecasting
+- Frontend: React 18, Vite, TanStack Query v5, Tailwind CSS, shadcn/ui, Recharts, Wouter
+- Backend: Express.js + TypeScript, Drizzle ORM 0.45, PostgreSQL
+- Auth: express-session + bcryptjs, session regeneration on login (CSRF/fixation hardened)
+- Scheduling: node-cron — lead quality decay every 15 minutes
+- UI: Dark terminal theme — JetBrains Mono, bg #070d1a
 
-## Technology
+## Compliance
 
-- Frontend: React + Vite, TanStack Query, Tailwind CSS, shadcn/ui, Recharts, Wouter
-- Backend: Express.js + TypeScript, Drizzle ORM, PostgreSQL
-- Auth: express-session + bcryptjs, sessions stored in PostgreSQL
-- Scheduling: node-cron (lead quality decay every 15 minutes)
-
-## Data Privacy
-
-All consumer leads are collected with explicit TCPA consent. The platform records consent timestamp and IP at the time of lead submission.
+All consumer leads collected on LeadHealth include:
+- Explicit TCPA consent checkbox with timestamp
+- IP address logging at submission
+- Clear disclosure language on all intake forms
+- No government affiliation — this is a private insurance solicitation platform
 
 ## Contact
 
