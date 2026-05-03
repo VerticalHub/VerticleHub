@@ -12,8 +12,10 @@ import {
 import {
   ShoppingCart, TrendingUp, Star, Award, AlertTriangle, Package,
   DollarSign, Filter, Search, Bell, Heart, HeartOff, BellOff, BellRing,
-  ArrowUpDown, Zap, X,
+  ArrowUpDown, Zap, X, SlidersHorizontal, ChevronDown, ChevronUp, RotateCcw,
 } from "lucide-react";
+
+const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
 
 type Tab = "order-book" | "watchlist" | "portfolio" | "ai-signals";
 
@@ -30,15 +32,49 @@ function VsChip({ score }: { score: number }) {
   return <span className={`font-mono text-[11px] ${cls} num`}>{score}</span>;
 }
 
+function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#0d1e3a] border border-[#2563eb50] text-[#38bdf8] text-[9px] font-mono rounded-sm">
+      {label}
+      <button onClick={onRemove} className="hover:text-white transition-colors"><X className="w-2.5 h-2.5" /></button>
+    </span>
+  );
+}
+
 export default function Marketplace() {
   const [tab, setTab]             = useState<Tab>("order-book");
   const [search, setSearch]       = useState("");
   const [filterIndustry, setFI]   = useState("");
   const [filterGeo, setFG]        = useState("");
-  const [sortBy, setSortBy]       = useState<"quality"|"price"|"value"|"featured"|"score">("featured");
+  const [sortBy, setSortBy]       = useState<"quality"|"price"|"value"|"featured"|"score"|"newest"|"oldest">("featured");
   const [confirmListing, setConfirm] = useState<any>(null);
   const [alertForm, setAlertForm] = useState({ industry: "medicare", geography: "FL", targetPrice: "" });
   const [showAlertForm, setShowAlertForm] = useState(false);
+
+  // ── Advanced filter sidebar state ─────────────────────────────────────────
+  const [showFilters, setShowFilters]   = useState(true);
+  const [fState, setFState]             = useState("");
+  const [fAgeMin, setFAgeMin]           = useState("");
+  const [fAgeMax, setFAgeMax]           = useState("");
+  const [fTypes, setFTypes]             = useState<Set<string>>(new Set());
+  const [fPriceMin, setFPriceMin]       = useState("");
+  const [fPriceMax, setFPriceMax]       = useState("");
+  const [fScoreMin, setFScoreMin]       = useState("");
+  const [fScoreMax, setFScoreMax]       = useState("");
+  const [fLeadAge, setFLeadAge]         = useState("");
+  const [fTcpa, setFTcpa]               = useState("");
+
+  const toggleType = (t: string) => setFTypes(prev => {
+    const n = new Set(prev);
+    n.has(t) ? n.delete(t) : n.add(t);
+    return n;
+  });
+  const clearFilters = () => {
+    setSearch(""); setFI(""); setFG(""); setFState("");
+    setFAgeMin(""); setFAgeMax(""); setFTypes(new Set());
+    setFPriceMin(""); setFPriceMax(""); setFScoreMin(""); setFScoreMax("");
+    setFLeadAge(""); setFTcpa("");
+  };
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -100,9 +136,43 @@ export default function Marketplace() {
   // ── Filter + sort listings ─────────────────────────────────────────────────
   const filtered = allListings
     .filter(l => {
-      if (search && !`${l.industry} ${l.geography}`.toLowerCase().includes(search.toLowerCase())) return false;
+      const ld = l.leadData;
+      // text search
+      if (search && !`${l.industry} ${l.geography} ${ld?.state || ""}`.toLowerCase().includes(search.toLowerCase())) return false;
+      // industry (legacy inline filter)
       if (filterIndustry && l.industry !== filterIndustry) return false;
-      if (filterGeo && l.geography !== filterGeo) return false;
+      // state
+      const st = fState || filterGeo;
+      if (st && ld?.state !== st && l.geography !== st) return false;
+      // lead type (interest)
+      if (fTypes.size > 0) {
+        const match = (fTypes.has("Medicare") && ld?.interestedInMedicare)
+          || (fTypes.has("ACA") && ld?.interestedInACA)
+          || (fTypes.has("FinalExpense") && ld?.interestedInFinalExpense);
+        if (!match) return false;
+      }
+      // price range
+      const price = parseFloat(l.price);
+      if (fPriceMin && price < parseFloat(fPriceMin)) return false;
+      if (fPriceMax && price > parseFloat(fPriceMax)) return false;
+      // AI score range
+      const score = ld?.leadScore ?? l.qualityScore;
+      if (fScoreMin && score < parseInt(fScoreMin)) return false;
+      if (fScoreMax && score > parseInt(fScoreMax)) return false;
+      // age of lead (capture recency in days)
+      if (fLeadAge && ld?.createdAt) {
+        const ageDays = (Date.now() - new Date(ld.createdAt).getTime()) / 86_400_000;
+        if (ageDays > parseInt(fLeadAge)) return false;
+      }
+      // TCPA
+      if (fTcpa === "yes" && !ld?.tcpaConsent) return false;
+      if (fTcpa === "no"  &&  ld?.tcpaConsent) return false;
+      // subject age range (from DOB)
+      if ((fAgeMin || fAgeMax) && ld?.dateOfBirth) {
+        const subAge = Math.floor((Date.now() - new Date(ld.dateOfBirth).getTime()) / (365.25 * 86_400_000));
+        if (fAgeMin && subAge < parseInt(fAgeMin)) return false;
+        if (fAgeMax && subAge > parseInt(fAgeMax)) return false;
+      }
       return true;
     })
     .sort((a, b) => {
@@ -110,12 +180,21 @@ export default function Marketplace() {
         if (a.featured !== b.featured) return a.featured ? -1 : 1;
         return b.qualityScore - a.qualityScore;
       }
-      if (sortBy === "score")    return (b.leadData?.leadScore ?? b.qualityScore) - (a.leadData?.leadScore ?? a.qualityScore);
-      if (sortBy === "quality")  return b.qualityScore - a.qualityScore;
-      if (sortBy === "price")    return parseFloat(a.price) - parseFloat(b.price);
-      if (sortBy === "value")    return valueScore(b.qualityScore, b.price) - valueScore(a.qualityScore, a.price);
+      if (sortBy === "score")   return (b.leadData?.leadScore ?? b.qualityScore) - (a.leadData?.leadScore ?? a.qualityScore);
+      if (sortBy === "quality") return b.qualityScore - a.qualityScore;
+      if (sortBy === "price")   return parseFloat(a.price) - parseFloat(b.price);
+      if (sortBy === "value")   return valueScore(b.qualityScore, b.price) - valueScore(a.qualityScore, a.price);
+      if (sortBy === "newest")  return new Date(b.leadData?.createdAt || b.createdAt || 0).getTime() - new Date(a.leadData?.createdAt || a.createdAt || 0).getTime();
+      if (sortBy === "oldest")  return new Date(a.leadData?.createdAt || a.createdAt || 0).getTime() - new Date(b.leadData?.createdAt || b.createdAt || 0).getTime();
       return 0;
     });
+
+  // active filter count for badge
+  const activeFilterCount = [
+    search, fState, filterGeo, filterIndustry,
+    fAgeMin, fAgeMax, fPriceMin, fPriceMax,
+    fScoreMin, fScoreMax, fLeadAge, fTcpa,
+  ].filter(Boolean).length + fTypes.size;
 
   // Watchlist listings with full detail
   const watchlistListings = allListings.filter(l => watchlistIds.has(l.id));
@@ -235,33 +314,220 @@ export default function Marketplace() {
 
         {/* ── ORDER BOOK ──────────────────────────────────────────────────── */}
         {tab === "order-book" && (
-          <div className="fade-in space-y-3">
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-40">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#2a4060]" />
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search industry, state..."
-                  className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono pl-9 pr-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+          <div className="fade-in flex gap-4 items-start">
+
+            {/* ── FILTER SIDEBAR ─────────────────────────────────────────── */}
+            {showFilters && (
+              <div className="w-52 shrink-0 bg-[#0d1526] border border-[#1e2d4a] rounded-sm sticky top-4 overflow-hidden">
+                {/* Sidebar header */}
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#1e2d4a] bg-[#091220]">
+                  <div className="flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#38bdf8]" />
+                    <span className="text-[10px] font-mono tracking-widest text-[#4a6080]">FILTERS</span>
+                    {activeFilterCount > 0 && (
+                      <span className="ml-1 bg-[#2563eb] text-white text-[9px] font-mono rounded-full px-1.5 py-0.5 leading-none">{activeFilterCount}</span>
+                    )}
+                  </div>
+                  {activeFilterCount > 0 && (
+                    <button onClick={clearFilters} className="flex items-center gap-1 text-[9px] font-mono text-[#ff4d4d] hover:text-[#ff8080] transition-colors">
+                      <RotateCcw className="w-2.5 h-2.5" /> CLEAR
+                    </button>
+                  )}
+                </div>
+
+                <div className="p-3 space-y-4 max-h-[calc(100vh-220px)] overflow-y-auto">
+
+                  {/* SEARCH */}
+                  <div>
+                    <label className="block text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">SEARCH</label>
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#2a4060]" />
+                      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="industry, state..."
+                        className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono pl-7 pr-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                    </div>
+                  </div>
+
+                  {/* STATE */}
+                  <div>
+                    <label className="block text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">STATE</label>
+                    <select value={fState} onChange={e => setFState(e.target.value)}
+                      className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                      <option value="">ALL STATES</option>
+                      {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+
+                  {/* LEAD TYPE */}
+                  <div>
+                    <label className="block text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">LEAD TYPE</label>
+                    <div className="space-y-1.5">
+                      {[
+                        { key: "Medicare",    label: "Medicare",      color: "#a78bfa" },
+                        { key: "ACA",         label: "ACA / Health",  color: "#38bdf8" },
+                        { key: "FinalExpense",label: "Final Expense", color: "#00d084" },
+                      ].map(({ key, label, color }) => (
+                        <label key={key} className="flex items-center gap-2 cursor-pointer group">
+                          <div onClick={() => toggleType(key)}
+                            className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center transition-colors ${fTypes.has(key) ? "border-transparent" : "border-[#2a4060] bg-transparent"}`}
+                            style={fTypes.has(key) ? { background: color } : {}}>
+                            {fTypes.has(key) && <X className="w-2 h-2 text-black" />}
+                          </div>
+                          <span className="text-[10px] font-mono text-[#4a6080] group-hover:text-[#94b4d4] transition-colors">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* PRICE RANGE */}
+                  <div>
+                    <label className="block text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">PRICE RANGE ($)</label>
+                    <div className="flex items-center gap-1">
+                      <input type="number" value={fPriceMin} onChange={e => setFPriceMin(e.target.value)} placeholder="Min"
+                        className="w-1/2 bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                      <span className="text-[#2a4060] text-[10px]">–</span>
+                      <input type="number" value={fPriceMax} onChange={e => setFPriceMax(e.target.value)} placeholder="Max"
+                        className="w-1/2 bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                    </div>
+                  </div>
+
+                  {/* AI SCORE RANGE */}
+                  <div>
+                    <label className="block text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">AI SCORE RANGE</label>
+                    <div className="flex items-center gap-1">
+                      <input type="number" min={0} max={100} value={fScoreMin} onChange={e => setFScoreMin(e.target.value)} placeholder="0"
+                        className="w-1/2 bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                      <span className="text-[#2a4060] text-[10px]">–</span>
+                      <input type="number" min={0} max={100} value={fScoreMax} onChange={e => setFScoreMax(e.target.value)} placeholder="100"
+                        className="w-1/2 bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      {[
+                        { label: "PRIME", min: "80", max: "", color: "#00d084" },
+                        { label: "GOOD",  min: "60", max: "79", color: "#fbbf24" },
+                        { label: "LOW",   min: "",   max: "39", color: "#ff4d4d" },
+                      ].map(p => (
+                        <button key={p.label} onClick={() => { setFScoreMin(p.min); setFScoreMax(p.max); }}
+                          className="text-[8px] font-mono px-1.5 py-0.5 rounded border transition-colors"
+                          style={{ color: p.color, borderColor: p.color + "50", background: p.color + "12" }}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SUBJECT AGE RANGE */}
+                  <div>
+                    <label className="block text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">SUBJECT AGE (YRS)</label>
+                    <div className="flex items-center gap-1">
+                      <input type="number" value={fAgeMin} onChange={e => setFAgeMin(e.target.value)} placeholder="Min"
+                        className="w-1/2 bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                      <span className="text-[#2a4060] text-[10px]">–</span>
+                      <input type="number" value={fAgeMax} onChange={e => setFAgeMax(e.target.value)} placeholder="Max"
+                        className="w-1/2 bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {[["18-34","18","34"],["35-54","35","54"],["55-64","55","64"],["65+","65",""]].map(([label, min, max]) => (
+                        <button key={label} onClick={() => { setFAgeMin(min); setFAgeMax(max); }}
+                          className="text-[8px] font-mono text-[#4a6080] hover:text-[#38bdf8] px-1.5 py-0.5 rounded border border-[#1e2d4a] hover:border-[#38bdf840] transition-colors">
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* LEAD CAPTURE AGE */}
+                  <div>
+                    <label className="block text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">LEAD FRESHNESS</label>
+                    <div className="space-y-1">
+                      {[
+                        { label: "ALL TIME",   value: "" },
+                        { label: "LAST 7 DAYS",  value: "7" },
+                        { label: "LAST 30 DAYS", value: "30" },
+                        { label: "LAST 90 DAYS", value: "90" },
+                        { label: "LAST YEAR",  value: "365" },
+                      ].map(opt => (
+                        <label key={opt.value} className="flex items-center gap-2 cursor-pointer group">
+                          <div onClick={() => setFLeadAge(opt.value)}
+                            className={`w-3 h-3 rounded-full border-2 flex items-center justify-center transition-colors ${fLeadAge === opt.value ? "border-[#38bdf8]" : "border-[#2a4060]"}`}>
+                            {fLeadAge === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-[#38bdf8]" />}
+                          </div>
+                          <span className={`text-[10px] font-mono transition-colors ${fLeadAge === opt.value ? "text-[#38bdf8]" : "text-[#4a6080] group-hover:text-[#94b4d4]"}`}>
+                            {opt.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* TCPA STATUS */}
+                  <div>
+                    <label className="block text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">TCPA CONSENT</label>
+                    <div className="space-y-1">
+                      {[
+                        { label: "ANY",          value: "" },
+                        { label: "VERIFIED ✓",   value: "yes" },
+                        { label: "NOT VERIFIED", value: "no" },
+                      ].map(opt => (
+                        <label key={opt.value} className="flex items-center gap-2 cursor-pointer group">
+                          <div onClick={() => setFTcpa(opt.value)}
+                            className={`w-3 h-3 rounded-full border-2 flex items-center justify-center transition-colors ${fTcpa === opt.value ? "border-[#00d084]" : "border-[#2a4060]"}`}>
+                            {fTcpa === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-[#00d084]" />}
+                          </div>
+                          <span className={`text-[10px] font-mono transition-colors ${fTcpa === opt.value ? "text-[#00d084]" : "text-[#4a6080] group-hover:text-[#94b4d4]"}`}>
+                            {opt.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
               </div>
-              <select value={filterIndustry} onChange={e => setFI(e.target.value)}
-                className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
-                <option value="">ALL INDUSTRIES</option>
-                {industries.map(i => <option key={i} value={i}>{i.toUpperCase()}</option>)}
-              </select>
-              <select value={filterGeo} onChange={e => setFG(e.target.value)}
-                className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
-                <option value="">ALL STATES</option>
-                {geos.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-              <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
-                className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
-                <option value="featured">SORT: FEATURED</option>
-                <option value="score">SORT: AI SCORE ↓</option>
-                <option value="quality">SORT: QUALITY</option>
-                <option value="value">SORT: VALUE SCORE</option>
-                <option value="price">SORT: PRICE ↑</option>
-              </select>
-            </div>
+            )}
+
+            {/* ── MAIN CONTENT ───────────────────────────────────────────── */}
+            <div className="flex-1 min-w-0 space-y-3">
+              {/* Top control bar */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Filter toggle */}
+                <button onClick={() => setShowFilters(v => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono rounded-sm border transition-colors ${showFilters ? "bg-[#0d1e3a] border-[#2563eb] text-[#38bdf8]" : "bg-[#060e1c] border-[#1e2d4a] text-[#4a6080] hover:text-[#94b4d4]"}`}>
+                  <Filter className="w-3.5 h-3.5" />
+                  FILTERS
+                  {activeFilterCount > 0 && (
+                    <span className="bg-[#2563eb] text-white text-[9px] font-mono rounded-full px-1.5 py-0.5 leading-none">{activeFilterCount}</span>
+                  )}
+                </button>
+                {/* Sort */}
+                <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
+                  className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                  <option value="featured">SORT: FEATURED</option>
+                  <option value="score">SORT: AI SCORE ↓</option>
+                  <option value="quality">SORT: QUALITY</option>
+                  <option value="value">SORT: VALUE SCORE</option>
+                  <option value="price">SORT: PRICE ↑</option>
+                  <option value="newest">SORT: NEWEST</option>
+                  <option value="oldest">SORT: OLDEST</option>
+                </select>
+                <span className="ml-auto text-[10px] font-mono text-[#3a5070] num">{filtered.length} / {allListings.length} listings</span>
+              </div>
+
+              {/* Active filter chips */}
+              {activeFilterCount > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {search && <Chip label={`"${search}"`} onRemove={() => setSearch("")} />}
+                  {fState && <Chip label={`STATE: ${fState}`} onRemove={() => setFState("")} />}
+                  {fAgeMin && <Chip label={`AGE ≥${fAgeMin}`} onRemove={() => setFAgeMin("")} />}
+                  {fAgeMax && <Chip label={`AGE ≤${fAgeMax}`} onRemove={() => setFAgeMax("")} />}
+                  {[...fTypes].map(t => <Chip key={t} label={t.toUpperCase()} onRemove={() => toggleType(t)} />)}
+                  {fPriceMin && <Chip label={`$${fPriceMin}+`} onRemove={() => setFPriceMin("")} />}
+                  {fPriceMax && <Chip label={`≤$${fPriceMax}`} onRemove={() => setFPriceMax("")} />}
+                  {fScoreMin && <Chip label={`SCORE ≥${fScoreMin}`} onRemove={() => setFScoreMin("")} />}
+                  {fScoreMax && <Chip label={`SCORE ≤${fScoreMax}`} onRemove={() => setFScoreMax("")} />}
+                  {fLeadAge && <Chip label={`LAST ${fLeadAge}D`} onRemove={() => setFLeadAge("")} />}
+                  {fTcpa && <Chip label={`TCPA: ${fTcpa.toUpperCase()}`} onRemove={() => setFTcpa("")} />}
+                </div>
+              )}
 
             {/* Listings table */}
             <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm overflow-hidden">
@@ -373,6 +639,7 @@ export default function Marketplace() {
                 <span className="text-[11px] font-mono text-[#ff4d4d]">LOW BALANCE — Add funds to continue purchasing leads</span>
               </div>
             )}
+            </div>
           </div>
         )}
 
