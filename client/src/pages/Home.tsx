@@ -32,24 +32,24 @@ export default function Home() {
         
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://healthcareconnect.com/" />
+        <meta property="og:url" content="https://www.leadhealth.co/" />
         <meta property="og:title" content="Health Insurance Quotes | Compare ACA, Medicare & Life Insurance Plans" />
         <meta property="og:description" content="Check if you qualify for premium subsidies and tax credits on ACA health insurance plans. Compare options for Medicare, Affordable Care Act, and Final Expense insurance." />
         <meta property="og:image" content="https://images.unsplash.com/photo-1576091160550-2173dba999ef" />
         
         {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:url" content="https://healthcareconnect.com/" />
+        <meta name="twitter:url" content="https://www.leadhealth.co/" />
         <meta name="twitter:title" content="Health Insurance Quotes | Compare ACA, Medicare & Life Insurance Plans" />
         <meta name="twitter:description" content="Check if you qualify for premium subsidies and tax credits on ACA health insurance plans. Compare options for Medicare, Affordable Care Act, and Final Expense insurance." />
         <meta name="twitter:image" content="https://images.unsplash.com/photo-1576091160550-2173dba999ef" />
         
         {/* Canonical Link */}
-        <link rel="canonical" href="https://healthcareconnect.com/" />
+        <link rel="canonical" href="https://www.leadhealth.co/" />
         
         {/* Additional SEO metadata */}
         <meta name="robots" content="index, follow" />
-        <meta name="author" content="HealthCare Connect" />
+        <meta name="author" content="LeadHealth" />
         <meta name="geo.region" content="US" />
         <meta name="geo.placename" content="United States" />
       </Helmet>

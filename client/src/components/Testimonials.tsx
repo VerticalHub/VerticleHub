@@ -4,19 +4,19 @@ import { motion } from "framer-motion";
 export default function Testimonials() {
   const testimonials = [
     {
-      quote: "I was overwhelmed trying to navigate Medicare options. HealthCare Connect made it simple and found me a plan that saves me over $200 a month on prescriptions.",
+      quote: "I was overwhelmed trying to navigate Medicare options. LeadHealth made it simple and found me a plan that saves me over $200 a month on prescriptions.",
       author: "Margaret B.",
       position: "Medicare Advantage Client",
       initials: "MB"
     },
     {
-      quote: "After losing my employer coverage, I needed an affordable ACA plan. The team at HealthCare Connect helped me get a subsidized plan that covers all my needs at a price I can afford.",
+      quote: "After losing my employer coverage, I needed an affordable ACA plan. The team at LeadHealth helped me get a subsidized plan that covers all my needs at a price I can afford.",
       author: "James T.",
       position: "ACA/Obamacare Client",
       initials: "JT"
     },
     {
-      quote: "I wanted to make sure my family wouldn't struggle with expenses when I'm gone. The final expense policy I got through HealthCare Connect gives me peace of mind at an affordable monthly premium.",
+      quote: "I wanted to make sure my family wouldn't struggle with expenses when I'm gone. The final expense policy I got through LeadHealth gives me peace of mind at an affordable monthly premium.",
       author: "Sandra C.",
       position: "Final Expense Client",
       initials: "SC"

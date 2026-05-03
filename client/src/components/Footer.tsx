@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div>
-            <h3 className="text-xl font-heading font-bold mb-4">HealthCare Connect</h3>
+            <h3 className="text-xl font-heading font-bold mb-4">LeadHealth</h3>
             <p className="text-gray-400 mb-4">Helping Americans find affordable healthcare coverage options since 2010.</p>
             <div className="flex space-x-4">
               <a href="#" className="text-gray-400 hover:text-white transition">
@@ -60,8 +60,8 @@ export default function Footer() {
         </div>
         
         <div className="border-t border-gray-800 pt-6 text-center text-gray-500 text-sm">
-          <p className="mb-2">© {new Date().getFullYear()} HealthCare Connect. All rights reserved.</p>
-          <p>HealthCare Connect is not affiliated with any government entity or program. This is an advertisement for insurance. This website is a solicitation of insurance that may be matched with consumers interested in purchasing insurance. The service is not available in all states.</p>
+          <p className="mb-2">© {new Date().getFullYear()} LeadHealth. All rights reserved.</p>
+          <p>LeadHealth is not affiliated with any government entity or program. This is an advertisement for insurance. This website is a solicitation of insurance that may be matched with consumers interested in purchasing insurance. The service is not available in all states.</p>
         </div>
       </div>
     </footer>

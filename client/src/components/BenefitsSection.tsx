@@ -33,7 +33,7 @@ export default function BenefitsSection() {
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
           >
-            Why Choose HealthCare Connect?
+            Why Choose LeadHealth?
           </motion.h2>
           <motion.p 
             className="text-xl text-gray-600 max-w-3xl mx-auto"
