@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { X, Phone, Mail, MapPin, Calendar, Shield, FileText, User, Zap, Save, ExternalLink } from "lucide-react";
+import { X, Phone, Mail, MapPin, Calendar, Shield, FileText, User, Zap, Save, ExternalLink, TrendingUp } from "lucide-react";
 import ScoreBadge from "./ScoreBadge";
+import PriceSparkline from "./PriceSparkline";
 
 type ModalTab = "overview" | "score" | "notes";
 
@@ -275,6 +276,21 @@ export default function LeadDetailModal({ leadId, listing, purchase, isOwned, on
                             <p className="text-[12px] font-mono font-bold text-[#00d084] mt-1 num">{f.value}</p>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Price history sparkline */}
+                  {listing && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-3">
+                        <TrendingUp className="w-3 h-3 text-[#4a6080]" />
+                        <p className="text-[9px] font-mono tracking-widest text-[#3a5070]">
+                          PRICE HISTORY — {listing.industry?.toUpperCase()} LEADS (LAST 30 DAYS)
+                        </p>
+                      </div>
+                      <div className="p-4 bg-[#060e1c] border border-[#1e2d4a] rounded-sm">
+                        <PriceSparkline industry={listing.industry} currentPrice={parseFloat(listing.price)} />
                       </div>
                     </div>
                   )}

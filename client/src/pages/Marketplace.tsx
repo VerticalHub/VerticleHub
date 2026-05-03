@@ -10,6 +10,7 @@ import {
   BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
 } from "recharts";
+import PriceSparkline from "@/components/PriceSparkline";
 import {
   ShoppingCart, TrendingUp, Star, Award, AlertTriangle, Package,
   DollarSign, Filter, Search, Bell, Heart, HeartOff, BellOff, BellRing,
@@ -756,7 +757,7 @@ export default function Marketplace() {
                         })()}
                       </th>
                       <th className="px-3 py-2.5 w-8"></th>
-                      {["INDUSTRY","GEO","PRICE","AI SCORE","QUALITY","VALUE","RESOLD","BADGES","ACTIONS"].map(h => (
+                      {["INDUSTRY","GEO","PRICE","30D TREND","AI SCORE","QUALITY","VALUE","RESOLD","BADGES","ACTIONS"].map(h => (
                         <th key={h} className="px-3 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070] whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -804,6 +805,9 @@ export default function Marketplace() {
                           </td>
                           <td className="px-3 py-3 text-[11px] font-mono text-[#94b4d4]">{l.geography}</td>
                           <td className="px-3 py-3 text-[14px] font-mono font-bold text-[#00d084] num">${l.price}</td>
+                          <td className="px-3 py-3">
+                            <PriceSparkline industry={l.industry} compact />
+                          </td>
                           {/* AI Score with breakdown tooltip on hover */}
                           <td className="px-3 py-3">
                             <ScoreBadge

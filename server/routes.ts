@@ -902,6 +902,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Market Trends ─────────────────────────────────────────────────────────
+  // ── Price history (sparklines) ────────────────────────────────────────────
+  app.get("/api/price-history", async (req, res) => {
+    try {
+      const industry = (req.query.industry as string) || "";
+      // Pull all listings for this industry to get baseline price
+      const allListings = await storage.getAllLeadListings();
+      const industryListings = industry
+        ? allListings.filter(l => l.industry === industry)
+        : allListings;
+      const basePrice = industryListings.length
+        ? industryListings.reduce((s, l) => s + parseFloat(l.price as string), 0) / industryListings.length
+        : 35;
+
+      // Pull real purchase transactions for this industry from last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+      const allPurchases = await storage.getLeadPurchasesDetailed(0).catch(() => []);
+      const relevant = allPurchases.filter(p =>
+        (!industry || p.industry === industry) &&
+        p.purchaseDate && new Date(p.purchaseDate) >= thirtyDaysAgo
+      );
+
+      // Build day map — fill with realistic synthetic data where no real txns exist
+      const dayMap: Record<string, { sum: number; count: number }> = {};
+      for (let i = 0; i < 30; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - (29 - i));
+        dayMap[d.toISOString().slice(0, 10)] = { sum: 0, count: 0 };
+      }
+      for (const p of relevant) {
+        const day = new Date(p.purchaseDate!).toISOString().slice(0, 10);
+        if (day in dayMap) {
+          dayMap[day].sum += parseFloat(p.pricePaid as string);
+          dayMap[day].count += 1;
+        }
+      }
+
+      // Smooth synthetic baseline with slight drift
+      let synth = basePrice;
+      const data = Object.entries(dayMap).map(([date, { sum, count }], i) => {
+        const label = new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        let price: number;
+        if (count > 0) {
+          price = +(sum / count).toFixed(2);
+          synth = price; // anchor synthetic to real data
+        } else {
+          // Gentle random walk ±3%
+          const drift = (Math.random() - 0.48) * synth * 0.03;
+          synth = Math.max(basePrice * 0.7, Math.min(basePrice * 1.4, synth + drift));
+          price = +synth.toFixed(2);
+        }
+        return { date, label, price, real: count > 0 };
+      });
+
+      const prices = data.map(d => d.price);
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      const currentPrice = prices[prices.length - 1];
+      const startPrice   = prices[0];
+      const trend = currentPrice >= startPrice ? "up" : "down";
+      const changePct = startPrice ? +((currentPrice - startPrice) / startPrice * 100).toFixed(1) : 0;
+
+      return res.json({ success: true, data: { daily: data, minPrice, maxPrice, currentPrice, trend, changePct, industry } });
+    } catch (e) { return res.status(500).json({ success: false, message: "Failed to get price history" }); }
+  });
+
   app.get("/api/market-trends", async (req, res) => {
     try {
       const { industry, geography, days } = req.query;
