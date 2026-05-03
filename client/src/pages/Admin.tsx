@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Download, Shield, BarChart2, Plus, Activity,
@@ -19,6 +19,42 @@ const STATUS_COLORS: Record<string, string> = {
 };
 const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
 
+const LEADS_PAGE_SIZE = 10;
+
+function Pager({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
+  const totalPages = Math.ceil(total / LEADS_PAGE_SIZE);
+  if (totalPages <= 1) return <span className="text-[10px] font-mono text-[#3a5070] num">{total} total</span>;
+  const pages: (number | "…")[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (page > 3) pages.push("…");
+    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i);
+    if (page < totalPages - 2) pages.push("…");
+    pages.push(totalPages);
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={() => onPage(page - 1)} disabled={page === 1}
+        className="px-2 py-1 text-[11px] font-mono text-[#4a6080] hover:text-[#38bdf8] disabled:opacity-30 disabled:cursor-not-allowed">‹</button>
+      {pages.map((p, i) =>
+        p === "…" ? (
+          <span key={`e${i}`} className="px-1 text-[10px] font-mono text-[#2a4060]">…</span>
+        ) : (
+          <button key={p} onClick={() => onPage(p as number)}
+            className={`w-6 h-6 text-[10px] font-mono rounded-sm transition-colors ${p === page ? "bg-[#2563eb] text-white" : "text-[#4a6080] hover:text-[#38bdf8] hover:bg-[#0d1e3a]"}`}>
+            {p}
+          </button>
+        )
+      )}
+      <button onClick={() => onPage(page + 1)} disabled={page === Math.ceil(total / LEADS_PAGE_SIZE)}
+        className="px-2 py-1 text-[11px] font-mono text-[#4a6080] hover:text-[#38bdf8] disabled:opacity-30 disabled:cursor-not-allowed">›</button>
+      <span className="ml-2 text-[9px] font-mono text-[#2a4060] num">{total} total</span>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   const s = status || "new";
   return <span className={`badge-${s}`}>{s.toUpperCase()}</span>;
@@ -36,6 +72,7 @@ export default function Admin() {
   const [editStatus, setEditStatus] = useState<Record<number, string>>({});
   const [newListing, setNewListing] = useState({ leadId: "", price: "", industry: "healthcare", geography: "" });
   const [genPred, setGenPred] = useState({ industry: "healthcare", geography: "CA" });
+  const [leadsPage, setLeadsPage] = useState(1);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -55,6 +92,11 @@ export default function Admin() {
     staleTime: 10_000,
   });
   const leads: any[] = leadsResp?.data || [];
+
+  // Reset leads page when filters change
+  useEffect(() => { setLeadsPage(1); }, [search, filterState, filterStatus, filterTcpa, filterDnc]);
+
+  const pagedLeads = leads.slice((leadsPage - 1) * LEADS_PAGE_SIZE, leadsPage * LEADS_PAGE_SIZE);
 
   const { data: listingsResp } = useQuery<any>({
     queryKey: ["/api/lead-listings/all"],
@@ -501,7 +543,7 @@ export default function Admin() {
                       <tr><td colSpan={9} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">
                         NO LEADS FOUND — adjust filters or capture new leads
                       </td></tr>
-                    ) : leads.map((l: any) => (
+                    ) : pagedLeads.map((l: any) => (
                       <>
                         <tr key={l.id}
                           className={`hover:bg-[#0a1628] transition-colors cursor-pointer group ${l.dnc ? "opacity-50" : ""}`}
@@ -633,9 +675,11 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
-              <div className="px-4 py-2.5 border-t border-[#1e2d4a] flex items-center justify-between">
-                <span className="text-[10px] font-mono text-[#3a5070]">{leads.length} LEADS SHOWN</span>
-                <span className="text-[9px] font-mono text-[#2a4060]">Click row to expand · Click status badge to edit inline</span>
+              <div className="px-4 py-2.5 border-t border-[#1e2d4a] flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[10px] font-mono text-[#3a5070]">
+                  {leads.length === 0 ? "0 leads" : `${Math.min((leadsPage - 1) * LEADS_PAGE_SIZE + 1, leads.length)}–${Math.min(leadsPage * LEADS_PAGE_SIZE, leads.length)} of ${leads.length} leads`}
+                </span>
+                <Pager page={leadsPage} total={leads.length} onPage={setLeadsPage} />
               </div>
             </div>
           </div>

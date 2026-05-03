@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +33,42 @@ function valueScore(q: number, price: string) {
 function VsChip({ score }: { score: number }) {
   const cls = score >= 25 ? "vs-high" : score >= 15 ? "vs-med" : "vs-low";
   return <span className={`font-mono text-[11px] ${cls} num`}>{score}</span>;
+}
+
+const PAGE_SIZE = 10;
+
+function Pager({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  if (totalPages <= 1) return <span className="text-[10px] font-mono text-[#3a5070] num">{total} total</span>;
+  const pages: (number | "…")[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (page > 3) pages.push("…");
+    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i);
+    if (page < totalPages - 2) pages.push("…");
+    pages.push(totalPages);
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={() => onPage(page - 1)} disabled={page === 1}
+        className="px-2 py-1 text-[11px] font-mono text-[#4a6080] hover:text-[#38bdf8] disabled:opacity-30 disabled:cursor-not-allowed">‹</button>
+      {pages.map((p, i) =>
+        p === "…" ? (
+          <span key={`e${i}`} className="px-1 text-[10px] font-mono text-[#2a4060]">…</span>
+        ) : (
+          <button key={p} onClick={() => onPage(p as number)}
+            className={`w-6 h-6 text-[10px] font-mono rounded-sm transition-colors ${p === page ? "bg-[#2563eb] text-white" : "text-[#4a6080] hover:text-[#38bdf8] hover:bg-[#0d1e3a]"}`}>
+            {p}
+          </button>
+        )
+      )}
+      <button onClick={() => onPage(page + 1)} disabled={page === Math.ceil(total / PAGE_SIZE)}
+        className="px-2 py-1 text-[11px] font-mono text-[#4a6080] hover:text-[#38bdf8] disabled:opacity-30 disabled:cursor-not-allowed">›</button>
+      <span className="ml-2 text-[9px] font-mono text-[#2a4060] num">{total} total</span>
+    </div>
+  );
 }
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
@@ -168,6 +204,7 @@ export default function Marketplace() {
   // ── Bulk selection state ───────────────────────────────────────────────────
   const [selectedIds, setSelectedIds]       = useState<Set<number>>(new Set());
   const [showBulkModal, setShowBulkModal]   = useState(false);
+  const [page, setPage] = useState(1);
 
   const toggleSelect = (id: number) => setSelectedIds(prev => {
     const n = new Set(prev);
@@ -330,6 +367,11 @@ export default function Marketplace() {
       if (sortBy === "oldest")  return new Date(a.leadData?.createdAt || a.createdAt || 0).getTime() - new Date(b.leadData?.createdAt || b.createdAt || 0).getTime();
       return 0;
     });
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setPage(1); }, [search, fState, filterGeo, filterIndustry, fAgeMin, fAgeMax, fPriceMin, fPriceMax, fScoreMin, fScoreMax, fLeadAge, fTcpa, fTypes, sortBy]);
+
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // active filter count for badge
   const activeFilterCount = [
@@ -776,7 +818,7 @@ export default function Marketplace() {
                       ))
                     ) : filtered.length === 0 ? (
                       <tr><td colSpan={10} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO LISTINGS AVAILABLE</td></tr>
-                    ) : filtered.map((l: any) => {
+                    ) : paginated.map((l: any) => {
                       const vs = valueScore(l.qualityScore, l.price);
                       const owned = purchases.some(p => p.listingId === l.id);
                       const watched = watchlistIds.has(l.id);
@@ -878,9 +920,14 @@ export default function Marketplace() {
                   </tbody>
                 </table>
               </div>
-              <div className="px-4 py-2.5 border-t border-[#1e2d4a] flex items-center justify-between">
-                <span className="text-[10px] font-mono text-[#3a5070]">{filtered.length} LISTINGS · {watchlistIds.size} WATCHED</span>
-                <span className="text-[9px] font-mono text-[#2a4060]">Click ♥ to watchlist · Value Score = Quality÷Price×10</span>
+              <div className="px-4 py-2.5 border-t border-[#1e2d4a] flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-mono text-[#3a5070]">
+                    {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} listings
+                  </span>
+                  <span className="text-[9px] font-mono text-[#2a4060] hidden sm:block">· {watchlistIds.size} watched</span>
+                </div>
+                <Pager page={page} total={filtered.length} onPage={setPage} />
               </div>
             </div>
 

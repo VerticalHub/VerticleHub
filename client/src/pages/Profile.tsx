@@ -47,19 +47,19 @@ export default function Profile() {
   });
   const me = meResp?.data;
 
-  const { data: creditsResp } = useQuery<any>({
+  const { data: creditsResp, isLoading: creditsLoading } = useQuery<any>({
     queryKey: ["/api/credits/1"],
     queryFn: () => fetch("/api/credits/1").then(r => r.json()),
   });
   const balance = parseFloat(creditsResp?.data?.balance || "0");
 
-  const { data: txResp } = useQuery<any>({
+  const { data: txResp, isLoading: txLoading } = useQuery<any>({
     queryKey: ["/api/credits/1/transactions"],
     queryFn: () => fetch("/api/credits/1/transactions").then(r => r.json()),
   });
   const transactions: any[] = txResp?.data || [];
 
-  const { data: purchasesResp } = useQuery<any>({
+  const { data: purchasesResp, isLoading: purchasesLoading } = useQuery<any>({
     queryKey: ["/api/purchases/1/detailed"],
     queryFn: () => fetch("/api/purchases/1/detailed").then(r => r.json()),
   });
@@ -200,10 +200,25 @@ export default function Profile() {
 
         {/* Stats grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard icon={ShoppingCart} label="TOTAL PURCHASES"   value={purchases.length}       sub="leads acquired"             color="#38bdf8" />
-          <StatCard icon={DollarSign}  label="TOTAL SPENT"       value={`$${totalSpent.toFixed(2)}`} sub="across all purchases"  color="#00d084" />
-          <StatCard icon={Star}        label="AVG QUALITY SCORE" value={avgScore || "—"}         sub="at time of purchase"        color="#fbbf24" />
-          <StatCard icon={Package}     label="WATCHLIST"         value={watchlistCount}           sub="leads saved"                color="#a78bfa" />
+          {purchasesLoading || creditsLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-sm shimmer flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-2.5 shimmer rounded w-20" />
+                  <div className="h-5 shimmer rounded w-14" />
+                  <div className="h-2 shimmer rounded w-24" />
+                </div>
+              </div>
+            ))
+          ) : (
+            <>
+              <StatCard icon={ShoppingCart} label="TOTAL PURCHASES"   value={purchases.length}            sub="leads acquired"             color="#38bdf8" />
+              <StatCard icon={DollarSign}  label="TOTAL SPENT"       value={`$${totalSpent.toFixed(2)}`} sub="across all purchases"       color="#00d084" />
+              <StatCard icon={Star}        label="AVG QUALITY SCORE" value={avgScore || "—"}             sub="at time of purchase"        color="#fbbf24" />
+              <StatCard icon={Package}     label="WATCHLIST"         value={watchlistCount}              sub="leads saved"                color="#a78bfa" />
+            </>
+          )}
         </div>
 
         {/* Two-column: segments + recent credits */}
@@ -219,7 +234,16 @@ export default function Profile() {
               {/* Industries */}
               <div>
                 <p className="text-[8px] font-mono tracking-widest text-[#2a4060] mb-2">BY INDUSTRY</p>
-                {topIndustries.length === 0 ? (
+                {purchasesLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-2 mb-2">
+                      <div className="w-2 h-2 rounded-full shimmer flex-shrink-0" />
+                      <div className="h-2.5 shimmer rounded w-20" />
+                      <div className="flex-1 h-1.5 shimmer rounded" />
+                      <div className="h-2.5 shimmer rounded w-6" />
+                    </div>
+                  ))
+                ) : topIndustries.length === 0 ? (
                   <p className="text-[10px] font-mono text-[#2a4060]">No purchases yet</p>
                 ) : topIndustries.map(([ind, cnt]) => {
                   const pct = Math.round((cnt / purchases.length) * 100);
@@ -239,7 +263,13 @@ export default function Profile() {
               {/* Geographies */}
               <div>
                 <p className="text-[8px] font-mono tracking-widest text-[#2a4060] mb-2">BY GEOGRAPHY</p>
-                {topGeos.length === 0 ? (
+                {purchasesLoading ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="h-6 w-16 shimmer rounded-sm" />
+                    ))}
+                  </div>
+                ) : topGeos.length === 0 ? (
                   <p className="text-[10px] font-mono text-[#2a4060]">No purchases yet</p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
@@ -263,7 +293,20 @@ export default function Profile() {
               <p className="text-[9px] font-mono tracking-widest text-[#3a5070]">RECENT CREDIT ACTIVITY</p>
             </div>
             <div className="divide-y divide-[#0a1120] max-h-64 overflow-y-auto">
-              {transactions.length === 0 ? (
+              {txLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center justify-between px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full shimmer" />
+                      <div className="space-y-1">
+                        <div className="h-2.5 shimmer rounded w-24" />
+                        <div className="h-2 shimmer rounded w-16" />
+                      </div>
+                    </div>
+                    <div className="h-3 shimmer rounded w-12" />
+                  </div>
+                ))
+              ) : transactions.length === 0 ? (
                 <div className="px-4 py-6 text-center text-[10px] font-mono text-[#2a4060]">NO TRANSACTIONS YET</div>
               ) : transactions.slice(0, 12).map((tx: any) => {
                 const positive = tx.type === "deposit" || tx.type === "referral_bonus" || tx.type === "credit";
@@ -317,7 +360,17 @@ export default function Profile() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#0a1120]">
-                {purchases.length === 0 ? (
+                {purchasesLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i}>
+                      {Array.from({ length: 7 }).map((_, j) => (
+                        <td key={j} className="px-4 py-3">
+                          <div className="h-3 shimmer rounded" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : purchases.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-[10px] font-mono text-[#2a4060]">
                       NO PURCHASES YET — browse the marketplace to get started
