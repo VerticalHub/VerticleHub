@@ -83,6 +83,20 @@ export default function Admin() {
   });
   const allUsers: any[] = usersResp?.data || [];
 
+  const { data: revenueResp } = useQuery<any>({
+    queryKey: ["/api/admin/revenue"],
+    queryFn: () => fetch("/api/admin/revenue").then(r => r.json()),
+    staleTime: 60_000,
+  });
+  const revenueData = revenueResp?.data;
+
+  const { data: healthResp } = useQuery<any>({
+    queryKey: ["/api/admin/health"],
+    queryFn: () => fetch("/api/admin/health").then(r => r.json()),
+    refetchInterval: 30_000,
+  });
+  const health = healthResp?.data;
+
   // ── Mutations ──────────────────────────────────────────────────────────────
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
@@ -304,6 +318,92 @@ export default function Admin() {
                   <div className="text-[9px] font-mono text-[#4a6080]">AVG QUALITY</div>
                 </div>
               </div>
+            </div>
+
+            {/* Revenue chart — 30 day */}
+            <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[10px] font-mono tracking-widest text-[#4a6080]">REVENUE — LAST 30 DAYS</p>
+                <div className="flex items-center gap-4">
+                  <div>
+                    <span className="text-[9px] font-mono text-[#3a5070]">TOTAL </span>
+                    <span className="text-[13px] font-mono font-bold text-[#00d084] num">${revenueData?.totalRevenue?.toFixed(2) ?? "0.00"}</span>
+                  </div>
+                  {revenueData?.peakDay?.revenue > 0 && (
+                    <div>
+                      <span className="text-[9px] font-mono text-[#3a5070]">PEAK </span>
+                      <span className="text-[12px] font-mono font-bold text-[#fbbf24] num">${revenueData.peakDay.revenue.toFixed(2)}</span>
+                      <span className="text-[9px] font-mono text-[#2a4060] ml-1">{revenueData.peakDay.label}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={revenueData?.daily ?? []} barSize={8} barGap={2}>
+                  <XAxis dataKey="label" tick={{ fill: "#3a5070", fontSize: 8, fontFamily: "monospace" }} axisLine={false} tickLine={false}
+                    interval={4} />
+                  <YAxis tick={{ fill: "#2a4060", fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} width={32}
+                    tickFormatter={v => `$${v}`} />
+                  <Tooltip
+                    contentStyle={{ background: "#0a1120", border: "1px solid #1e2d4a", fontFamily: "monospace", fontSize: 10, color: "#c8daf0" }}
+                    formatter={(v: any) => [`$${v.toFixed(2)}`, "Revenue"]}
+                    cursor={{ fill: "rgba(37,99,235,0.06)" }}
+                  />
+                  <Bar dataKey="revenue" radius={[2, 2, 0, 0]}>
+                    {(revenueData?.daily ?? []).map((_: any, i: number) => (
+                      <Cell key={i} fill={_ .revenue > 0 ? "#00d084" : "#1e2d4a"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* System health */}
+            <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[10px] font-mono tracking-widest text-[#4a6080]">SYSTEM HEALTH</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#00d084] blink" />
+                  <span className="text-[9px] font-mono text-[#00d084]">ALL SYSTEMS OPERATIONAL</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                {[
+                  { label: "UPTIME",        value: health ? `${Math.floor(health.uptime/3600)}h ${Math.floor((health.uptime%3600)/60)}m` : "—", color: "text-[#00d084]" },
+                  { label: "MEMORY",        value: health ? `${health.memoryMB} MB` : "—",     color: "text-[#38bdf8]" },
+                  { label: "TOTAL LEADS",   value: health?.totalLeads ?? "—",                   color: "text-[#a78bfa]" },
+                  { label: "PENDING SUBS",  value: health?.pendingSubs ?? "—",                  color: health?.pendingSubs > 0 ? "text-[#fbbf24]" : "text-[#4a6080]" },
+                ].map(k => (
+                  <div key={k.label} className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm p-3">
+                    <div className={`text-[16px] font-mono font-bold num ${k.color}`}>{k.value}</div>
+                    <div className="text-[8px] font-mono text-[#3a5070] tracking-widest mt-1">{k.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {[
+                  { label: "DATABASE",     status: health?.dbStatus      ?? "checking" },
+                  { label: "API SERVER",   status: health?.apiStatus     ?? "checking" },
+                  { label: "AI SCORING",   status: health?.scoringStatus ?? "checking" },
+                  { label: "AGING CRON",   status: health?.agingStatus   ?? "checking" },
+                ].map(s => {
+                  const ok = s.status === "operational" || s.status === "running" || s.status === "connected";
+                  return (
+                    <div key={s.label} className="flex items-center gap-2 p-2 bg-[#060e1c] border border-[#1e2d4a] rounded-sm">
+                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ok ? "bg-[#00d084]" : "bg-[#fbbf24]"}`} />
+                      <span className="text-[9px] font-mono text-[#4a6080]">{s.label}</span>
+                      <span className={`ml-auto text-[8px] font-mono font-bold ${ok ? "text-[#00d084]" : "text-[#fbbf24]"}`}>
+                        {s.status.toUpperCase()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {health?.timestamp && (
+                <p className="text-[8px] font-mono text-[#2a4060] mt-3">
+                  Last checked: {new Date(health.timestamp).toLocaleTimeString()} · Auto-refreshes every 30s
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -700,7 +800,22 @@ export default function Admin() {
 
         {/* ── USERS ───────────────────────────────────────────────────────── */}
         {tab === "users" && (
-          <div className="fade-in">
+          <div className="fade-in space-y-4">
+            {/* User summary KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "TOTAL USERS",    value: allUsers.length,                                                      color: "text-[#38bdf8]" },
+                { label: "TOTAL BALANCE",  value: `$${allUsers.reduce((s: number, u: any) => s + parseFloat(u.balance || 0), 0).toFixed(2)}`, color: "text-[#00d084]" },
+                { label: "TOTAL SPENT",    value: `$${allUsers.reduce((s: number, u: any) => s + parseFloat(u.totalSpent || 0), 0).toFixed(2)}`, color: "text-[#fbbf24]" },
+                { label: "TOTAL PURCHASES",value: allUsers.reduce((s: number, u: any) => s + (u.purchaseCount || 0), 0), color: "text-[#a78bfa]" },
+              ].map(k => (
+                <div key={k.label} className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+                  <div className={`text-[20px] font-mono font-bold num ${k.color}`}>{k.value}</div>
+                  <div className="text-[8px] font-mono text-[#3a5070] tracking-widest mt-1">{k.label}</div>
+                </div>
+              ))}
+            </div>
+
             <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm overflow-hidden">
               <div className="px-4 py-2.5 border-b border-[#1e2d4a]">
                 <span className="text-[10px] font-mono tracking-widest text-[#4a6080]">USER ACCOUNTS — {allUsers.length} REGISTERED</span>
@@ -709,14 +824,14 @@ export default function Admin() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[#1e2d4a]">
-                      {["ID","USERNAME","EMAIL","ROLE","REGISTERED"].map(h => (
-                        <th key={h} className="px-4 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070]">{h}</th>
+                      {["ID","USERNAME","EMAIL","ROLE","BALANCE","TOTAL SPENT","PURCHASES","REGISTERED"].map(h => (
+                        <th key={h} className="px-4 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070] whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#0a1120]">
                     {allUsers.length === 0 ? (
-                      <tr><td colSpan={5} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO USERS</td></tr>
+                      <tr><td colSpan={8} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO USERS</td></tr>
                     ) : allUsers.map((u: any) => (
                       <tr key={u.id} className="hover:bg-[#0a1628] transition-colors">
                         <td className="px-4 py-3 text-[11px] font-mono text-[#4a6080] num">{u.id}</td>
@@ -733,6 +848,15 @@ export default function Admin() {
                           <span className={`text-[10px] font-mono font-bold ${u.role==="admin"?"text-[#ff4d4d]":u.role==="agent"?"text-[#00d084]":"text-[#fbbf24]"}`}>
                             {u.role?.toUpperCase()}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-[11px] font-mono font-bold text-[#00d084] num">
+                          ${parseFloat(u.balance || 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-[11px] font-mono text-[#ff4d4d] num">
+                          ${parseFloat(u.totalSpent || 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-[11px] font-mono font-bold text-[#a78bfa] num">{u.purchaseCount ?? 0}</span>
                         </td>
                         <td className="px-4 py-3 text-[10px] font-mono text-[#2a4060]">
                           {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}

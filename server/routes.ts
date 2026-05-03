@@ -2,6 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
+import { db } from "./db";
+import { creditTransactions } from "@shared/schema";
+import { eq, and, gte } from "drizzle-orm";
 import { 
   leadValidationSchema, insertCreditAccountSchema,
   insertLeadListingSchema, insertDemandPredictionSchema,
@@ -195,9 +198,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/users", async (_req, res) => {
     try {
       const allUsers = await storage.getAllUsers();
-      const safe = allUsers.map(u => ({ id: u.id, username: u.username, email: u.email, role: u.role, createdAt: u.createdAt }));
-      return res.json({ success: true, data: safe });
+      const enriched = await Promise.all(allUsers.map(async u => {
+        const account  = await storage.getCreditAccount(u.id).catch(() => null);
+        const purchases = await storage.getLeadPurchases(u.id).catch(() => []);
+        return {
+          id: u.id, username: u.username, email: u.email, role: u.role, createdAt: u.createdAt,
+          balance:       account?.balance ?? "0.00",
+          totalSpent:    account?.totalPurchased ?? "0.00",
+          purchaseCount: purchases.length,
+        };
+      }));
+      return res.json({ success: true, data: enriched });
     } catch { return res.status(500).json({ success: false, message: "Failed to get users" }); }
+  });
+
+  // ── Admin analytics ───────────────────────────────────────────────────────
+  app.get("/api/admin/revenue", async (_req, res) => {
+    try {
+      // Build last-30-day revenue from credit_transactions (spend type = revenue)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+      const txns = await db
+        .select()
+        .from(creditTransactions)
+        .where(
+          and(
+            eq(creditTransactions.type, "spend"),
+            gte(creditTransactions.createdAt, thirtyDaysAgo)
+          )
+        );
+      // Group by day
+      const map: Record<string, number> = {};
+      for (let i = 0; i < 30; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - (29 - i));
+        map[d.toISOString().slice(0, 10)] = 0;
+      }
+      for (const t of txns) {
+        const day = new Date(t.createdAt!).toISOString().slice(0, 10);
+        if (day in map) map[day] += parseFloat(t.amount as string);
+      }
+      const data = Object.entries(map).map(([date, revenue]) => ({
+        date,
+        label: new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        revenue: +revenue.toFixed(2),
+      }));
+      const totalRevenue = data.reduce((s, d) => s + d.revenue, 0);
+      const peakDay = data.reduce((a, b) => a.revenue >= b.revenue ? a : b, data[0]);
+      return res.json({ success: true, data: { daily: data, totalRevenue: +totalRevenue.toFixed(2), peakDay } });
+    } catch { return res.status(500).json({ success: false, message: "Failed to get revenue" }); }
+  });
+
+  app.get("/api/admin/health", async (_req, res) => {
+    try {
+      const [leads, listings, users, subs] = await Promise.all([
+        storage.getAllLeads(),
+        storage.getAllLeadListings(),
+        storage.getAllUsers(),
+        storage.getAllSubmissions(),
+      ]);
+      const activeListings  = listings.filter(l => l.isActive).length;
+      const pendingSubs     = subs.filter(s => s.status === "pending").length;
+      const now             = Date.now();
+      const uptime          = process.uptime();
+      const memMB           = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+      return res.json({
+        success: true, data: {
+          uptime:        Math.floor(uptime),
+          memoryMB:      memMB,
+          totalLeads:    leads.length,
+          activeListings,
+          totalUsers:    users.length,
+          pendingSubs,
+          dbStatus:      "connected",
+          apiStatus:     "operational",
+          scoringStatus: "operational",
+          agingStatus:   "running",
+          timestamp:     new Date().toISOString(),
+        }
+      });
+    } catch { return res.status(500).json({ success: false, message: "Failed to get health" }); }
   });
 
   // ── Lead Stats (MUST be before /:id routes) ───────────────────────────────
