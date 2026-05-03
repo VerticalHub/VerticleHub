@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
 import PurchaseConfirmModal from "@/components/PurchaseConfirmModal";
+import ScoreBadge from "@/components/ScoreBadge";
 import {
   BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
@@ -34,7 +35,7 @@ export default function Marketplace() {
   const [search, setSearch]       = useState("");
   const [filterIndustry, setFI]   = useState("");
   const [filterGeo, setFG]        = useState("");
-  const [sortBy, setSortBy]       = useState<"quality"|"price"|"value"|"featured">("featured");
+  const [sortBy, setSortBy]       = useState<"quality"|"price"|"value"|"featured"|"score">("featured");
   const [confirmListing, setConfirm] = useState<any>(null);
   const [alertForm, setAlertForm] = useState({ industry: "medicare", geography: "FL", targetPrice: "" });
   const [showAlertForm, setShowAlertForm] = useState(false);
@@ -109,6 +110,7 @@ export default function Marketplace() {
         if (a.featured !== b.featured) return a.featured ? -1 : 1;
         return b.qualityScore - a.qualityScore;
       }
+      if (sortBy === "score")    return (b.leadData?.leadScore ?? b.qualityScore) - (a.leadData?.leadScore ?? a.qualityScore);
       if (sortBy === "quality")  return b.qualityScore - a.qualityScore;
       if (sortBy === "price")    return parseFloat(a.price) - parseFloat(b.price);
       if (sortBy === "value")    return valueScore(b.qualityScore, b.price) - valueScore(a.qualityScore, a.price);
@@ -254,6 +256,7 @@ export default function Marketplace() {
               <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
                 className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
                 <option value="featured">SORT: FEATURED</option>
+                <option value="score">SORT: AI SCORE ↓</option>
                 <option value="quality">SORT: QUALITY</option>
                 <option value="value">SORT: VALUE SCORE</option>
                 <option value="price">SORT: PRICE ↑</option>
@@ -267,7 +270,7 @@ export default function Marketplace() {
                   <thead>
                     <tr className="border-b border-[#1e2d4a]">
                       <th className="px-3 py-2.5"></th>
-                      {["INDUSTRY","GEO","PRICE","QUALITY","VALUE SCORE","RESOLD","BADGES","ACTIONS"].map(h => (
+                      {["INDUSTRY","GEO","PRICE","AI SCORE","QUALITY","VALUE","RESOLD","BADGES","ACTIONS"].map(h => (
                         <th key={h} className="px-3 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070] whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -275,17 +278,18 @@ export default function Marketplace() {
                   <tbody className="divide-y divide-[#0a1120]">
                     {isLoading ? (
                       Array.from({ length: 6 }).map((_, i) => (
-                        <tr key={i}>{Array.from({ length: 9 }).map((_, j) => (
+                        <tr key={i}>{Array.from({ length: 10 }).map((_, j) => (
                           <td key={j} className="px-3 py-3"><div className="h-3 shimmer rounded" /></td>
                         ))}</tr>
                       ))
                     ) : filtered.length === 0 ? (
-                      <tr><td colSpan={9} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO LISTINGS AVAILABLE</td></tr>
+                      <tr><td colSpan={10} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO LISTINGS AVAILABLE</td></tr>
                     ) : filtered.map((l: any) => {
                       const vs = valueScore(l.qualityScore, l.price);
                       const owned = purchases.some(p => p.listingId === l.id);
                       const watched = watchlistIds.has(l.id);
                       const canAfford = credits >= parseFloat(l.price);
+                      const aiScore = l.leadData?.leadScore ?? l.qualityScore;
                       return (
                         <tr key={l.id} className={`hover:bg-[#0a1628] transition-colors group ${owned ? "opacity-60" : ""}`}>
                           {/* Watchlist heart */}
@@ -304,13 +308,21 @@ export default function Marketplace() {
                           </td>
                           <td className="px-3 py-3 text-[11px] font-mono text-[#94b4d4]">{l.geography}</td>
                           <td className="px-3 py-3 text-[14px] font-mono font-bold text-[#00d084] num">${l.price}</td>
+                          {/* AI Score with breakdown tooltip on hover */}
+                          <td className="px-3 py-3">
+                            <ScoreBadge
+                              score={aiScore}
+                              leadData={l.leadData ?? undefined}
+                              size="md"
+                            />
+                          </td>
                           <td className="px-3 py-3">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[13px] font-mono font-bold num" style={{ color: l.qualityScore>=90?"#00d084":l.qualityScore>=75?"#fbbf24":"#ff4d4d" }}>
+                              <span className="text-[12px] font-mono font-bold num" style={{ color: l.qualityScore>=90?"#00d084":l.qualityScore>=75?"#fbbf24":"#ff4d4d" }}>
                                 {l.qualityScore}
                               </span>
-                              <div className="w-12 h-1.5 bg-[#0a1120] rounded-full overflow-hidden">
-                                <div className="h-full pipeline-bar rounded-full" style={{ width:`${l.qualityScore}%`, background: l.qualityScore>=90?"#00d084":l.qualityScore>=75?"#fbbf24":"#ff4d4d" }} />
+                              <div className="w-10 h-1.5 bg-[#0a1120] rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width:`${l.qualityScore}%`, background: l.qualityScore>=90?"#00d084":l.qualityScore>=75?"#fbbf24":"#ff4d4d" }} />
                               </div>
                             </div>
                           </td>
@@ -322,7 +334,7 @@ export default function Marketplace() {
                             <div className="flex gap-1 flex-wrap">
                               {l.featured && <span className="badge-featured">FEATURED</span>}
                               {vs >= 25 && <span className="badge-best-value">BEST VALUE</span>}
-                              {l.qualityScore >= 95 && <span className="text-[8px] font-mono text-[#00d084] border border-[#00d08440] bg-[#00d08415] px-1.5 py-0.5 rounded-sm">PRIME</span>}
+                              {aiScore >= 80 && <span className="text-[8px] font-mono text-[#00d084] border border-[#00d08440] bg-[#00d08415] px-1.5 py-0.5 rounded-sm">PRIME</span>}
                             </div>
                           </td>
                           <td className="px-3 py-3">

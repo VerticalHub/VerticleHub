@@ -96,6 +96,11 @@ Healthcare lead generation, resale marketplace, and AI demand intelligence platf
 - `POST /api/demand-predictions/generate` — Generate new prediction
 - `GET /api/market-trends` — Market trend time series
 
+### AI Lead Scoring
+- `POST /api/leads/rescore-all` — Recompute AI scores for all leads (returns count)
+- `GET /api/leads/:id/score-breakdown` — Per-lead score breakdown with tier + color
+- `GET /api/lead-listings` — Now returns `leadData` (join with leads) including `leadScore`
+
 ### Export
 - `GET /api/export/leads?state=&status=` — CSV export
 - `GET /api/export/listings` — Listings CSV
@@ -105,6 +110,22 @@ Healthcare lead generation, resale marketplace, and AI demand intelligence platf
 Tables: `users`, `leads`, `leadListings`, `leadPurchases`, `creditAccounts`, `creditTransactions`, `creditPackages`, `alerts`, `leadActivities`, `demandPredictions`, `marketTrends`, `watchlist`, `priceAlerts`
 
 Key lead fields: `status`, `source`, `tcpaConsent`, `tcpaConsentSource`, `dnc`, `agingScore`, `leadScore`, `notes`, `tags`, `annualIncome`, `householdSize`
+
+## AI Lead Scoring Engine (server/scoring.ts)
+
+7-factor deterministic score 0-100. Mirrored client-side in `ScoreBadge.tsx` for breakdown tooltips (no extra fetch needed).
+
+| Factor | Max | Logic |
+|---|---|---|
+| TCPA consent | 25 | Binary — consented or not |
+| Interest type | 20 | Medicare=13, FinalExpense=10, ACA=8; multi-interest combo bonus |
+| Age bracket | 15 | Age vs. interest fit (Medicare: 65+=15, ACA: 26-54=15) |
+| Recency | 15 | <6hr=15, <24hr=13, <7d=8, <30d=5, <90d=2 |
+| State demand | 10 | High-demand (FL/CA/NY/TX/AZ…)=10, medium=6, standard=3 |
+| Income fit | 8 | ACA: 100-400% FPL=8; FE: $18k-90k=8; Medicare: low-income=8 |
+| Completeness | 7 | DOB+2, income+2, household+1, quality source+1, no Medicaid+1 |
+
+Tiers: PRIME (≥80 green), GOOD (≥60 amber), FAIR (≥40 orange), LOW (<40 red)
 
 ## CSS Classes (index.css)
 

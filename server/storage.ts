@@ -12,6 +12,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, or, ilike, ne } from "drizzle-orm";
+import { computeLeadScore } from "./scoring";
 
 export interface PurchaseDetail {
   purchaseId: number; listingId: number; buyerId: number;
@@ -102,6 +103,11 @@ export interface IStorage {
   getFollowUps(userId: number): Promise<LeadActivity[]>;
   getAllRecentActivities(userId: number, limit?: number): Promise<LeadActivity[]>;
 
+  // AI Scoring
+  rescoreAllLeads(): Promise<number>;
+  getLeadListingsEnriched(filters?: { industry?: string; geography?: string; minPrice?: string; maxPrice?: string }): Promise<any[]>;
+  getAllLeadListingsEnriched(): Promise<any[]>;
+
   // AI / Market
   saveDemandPrediction(prediction: InsertDemandPrediction): Promise<DemandPrediction>;
   getDemandPredictions(industry?: string, geography?: string): Promise<DemandPrediction[]>;
@@ -130,17 +136,12 @@ export class DatabaseStorage implements IStorage {
 
   // ── Leads ──────────────────────────────────────────────────────────────────
   async createLead(insertLead: InsertLead): Promise<Lead> {
-    // Compute a lead score based on available data
-    let score = 50;
-    if ((insertLead as any).tcpaConsent) score += 20;
-    if ((insertLead as any).interestedInMedicare) score += 15;
-    if ((insertLead as any).interestedInACA) score += 10;
-    if ((insertLead as any).dateOfBirth) score += 5;
-    score = Math.min(100, score);
+    const now = new Date();
+    const { total: score } = computeLeadScore({ ...insertLead, createdAt: now });
 
     const [lead] = await db.insert(leads).values({ 
       ...insertLead, 
-      createdAt: new Date(),
+      createdAt: now,
       leadScore: score,
       status: "new",
       source: (insertLead as any).source || "web_form",
@@ -452,6 +453,58 @@ export class DatabaseStorage implements IStorage {
       ? db.select().from(marketTrends).where(and(...conditions))
       : db.select().from(marketTrends);
     return q.orderBy(desc(marketTrends.recordedAt)).limit(100);
+  }
+
+  // ── AI Scoring ──────────────────────────────────────────────────────────────
+  async rescoreAllLeads(): Promise<number> {
+    const allLeads = await db.select().from(leads);
+    let count = 0;
+    for (const lead of allLeads) {
+      const { total } = computeLeadScore(lead);
+      await db.update(leads).set({ leadScore: total }).where(eq(leads.id, lead.id));
+      count++;
+    }
+    return count;
+  }
+
+  private async _enrichListings(rawListings: any[]): Promise<any[]> {
+    if (!rawListings.length) return [];
+    const leadIds = [...new Set(rawListings.map(l => l.leadId).filter(Boolean))];
+    const leadRows = await db.select({
+      id: leads.id,
+      leadScore: leads.leadScore,
+      agingScore: leads.agingScore,
+      tcpaConsent: leads.tcpaConsent,
+      interestedInACA: leads.interestedInACA,
+      interestedInMedicare: leads.interestedInMedicare,
+      interestedInFinalExpense: leads.interestedInFinalExpense,
+      dateOfBirth: leads.dateOfBirth,
+      annualIncome: leads.annualIncome,
+      householdSize: leads.householdSize,
+      state: leads.state,
+      source: leads.source,
+      hasMedicaidMedicareVA: leads.hasMedicaidMedicareVA,
+      createdAt: leads.createdAt,
+    }).from(leads).where(
+      leadIds.length === 1
+        ? eq(leads.id, leadIds[0])
+        : sql`${leads.id} = ANY(ARRAY[${sql.raw(leadIds.join(","))}])`
+    );
+    const leadMap = new Map(leadRows.map(l => [l.id, l]));
+    return rawListings.map(listing => ({
+      ...listing,
+      leadData: leadMap.get(listing.leadId) ?? null,
+    }));
+  }
+
+  async getLeadListingsEnriched(filters?: { industry?: string; geography?: string; minPrice?: string; maxPrice?: string }) {
+    const raw = await this.getLeadListings(filters);
+    return this._enrichListings(raw);
+  }
+
+  async getAllLeadListingsEnriched() {
+    const raw = await this.getAllLeadListings();
+    return this._enrichListings(raw);
   }
 }
 

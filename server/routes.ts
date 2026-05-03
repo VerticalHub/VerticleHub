@@ -10,6 +10,7 @@ import {
 } from "@shared/schema";
 import { ZodError } from "zod";
 import { startAgingJob } from "./jobs/ageLeads";
+import { computeLeadScore, scoreLabel, scoreColor } from "./scoring";
 
 // ─── Seed ──────────────────────────────────────────────────────────────────────
 async function seedDatabase() {
@@ -627,18 +628,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get transactions" }); }
   });
 
+  // ── AI Scoring ────────────────────────────────────────────────────────────
+  app.post("/api/leads/rescore-all", async (_req, res) => {
+    try {
+      const count = await storage.rescoreAllLeads();
+      return res.json({ success: true, message: `Rescored ${count} leads`, count });
+    } catch (e) {
+      console.error("[rescore]", e);
+      return res.status(500).json({ success: false, message: "Rescore failed" });
+    }
+  });
+
+  app.get("/api/leads/:id/score-breakdown", async (req, res) => {
+    try {
+      const lead = await storage.getLeadById(parseInt(req.params.id));
+      if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
+      const { total, ...factors } = computeLeadScore(lead);
+      return res.json({
+        success: true,
+        data: {
+          score: total,
+          tier: scoreLabel(total),
+          color: scoreColor(total),
+          factors,
+        },
+      });
+    } catch { return res.status(500).json({ success: false, message: "Score breakdown failed" }); }
+  });
+
   // ── Lead Listings ─────────────────────────────────────────────────────────
   app.get("/api/lead-listings", async (req, res) => {
     try {
       const { industry, geography, minPrice, maxPrice } = req.query;
-      const listings = await storage.getLeadListings({ industry: industry as string, geography: geography as string, minPrice: minPrice as string, maxPrice: maxPrice as string });
+      const listings = await storage.getLeadListingsEnriched({ industry: industry as string, geography: geography as string, minPrice: minPrice as string, maxPrice: maxPrice as string });
       return res.json({ success: true, data: listings });
     } catch { return res.status(500).json({ success: false, message: "Failed to get listings" }); }
   });
 
   app.get("/api/lead-listings/all", async (_req, res) => {
     try {
-      return res.json({ success: true, data: await storage.getAllLeadListings() });
+      return res.json({ success: true, data: await storage.getAllLeadListingsEnriched() });
     } catch { return res.status(500).json({ success: false, message: "Failed to get all listings" }); }
   });
 
