@@ -1,0 +1,51 @@
+# LeadHealth
+
+> Healthcare lead generation, resale marketplace, and AI demand intelligence platform for insurance agents and agencies.
+
+LeadHealth (www.leadhealth.co) is a B2B SaaS platform that enables health insurance professionals to generate, buy, sell, and manage verified consumer leads for ACA (Affordable Care Act), Medicare, and Final Expense insurance products.
+
+## Platform Overview
+
+LeadHealth provides a full-stack lead lifecycle solution:
+
+- **Lead Generation** — TCPA-compliant intake forms capture consumer intent data including name, contact info, ZIP code, state, age, income, household size, insurance interest type, and consent timestamp.
+- **Lead Scoring** — Proprietary quality scoring algorithm (0–100) evaluates each lead across TCPA consent, interest type, age bracket, recency, state demand, income fit, and data completeness. Tiers: PRIME (≥80), GOOD (≥60), FAIR (≥40), LOW (<40).
+- **Lead Marketplace** — Agents and agencies list scored leads for sale; buyers browse, filter, and purchase leads using an in-platform credit system.
+- **Pipeline CRM** — Tracks leads through statuses: New → Contacted → Qualified → Converted → Archived, with full activity logging.
+- **AI Demand Intelligence** — Forecasts lead demand by state and insurance type using market trend data and predictive modeling.
+- **Credit Economy** — Buyers purchase credit packages; all marketplace transactions settle in credits with full ledger history.
+- **Referral Program** — Agents earn credits for referring new users via unique referral codes.
+- **Admin Console** — Full platform management: user roles, lead ingestion, listing control, credit management, demand predictions, export tools.
+
+## Target Users
+
+- Health insurance agents (independent and agency-employed)
+- Insurance agency managers
+- Lead aggregators and resellers
+- ACA, Medicare Advantage, and Final Expense carriers
+
+## Key Entities
+
+- **Leads** — Consumer records with demographics, insurance interests, TCPA consent, and quality score
+- **Lead Listings** — Priced marketplace entries wrapping a lead
+- **Lead Purchases** — Completed buyer transactions
+- **Credits** — In-platform currency for marketplace transactions
+- **Referrals** — Agent-to-agent referral tracking with credit rewards
+- **Alerts** — Real-time system notifications for marketplace activity
+- **Price Alerts** — Watchlist triggers when a listing drops below a target price
+- **Market Trends** — State-level demand and pricing data for forecasting
+
+## Technology
+
+- Frontend: React + Vite, TanStack Query, Tailwind CSS, shadcn/ui, Recharts, Wouter
+- Backend: Express.js + TypeScript, Drizzle ORM, PostgreSQL
+- Auth: express-session + bcryptjs, sessions stored in PostgreSQL
+- Scheduling: node-cron (lead quality decay every 15 minutes)
+
+## Data Privacy
+
+All consumer leads are collected with explicit TCPA consent. The platform records consent timestamp and IP at the time of lead submission.
+
+## Contact
+
+Website: https://www.leadhealth.co

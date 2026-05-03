@@ -1,11 +1,11 @@
 {
-  "name": "HealthCare Connect - Insurance Quotes",
-  "short_name": "HealthCare Connect",
-  "description": "Compare health insurance options including ACA, Medicare, and Final Expense insurance plans. Check eligibility for subsidies and tax credits.",
+  "name": "LeadHealth — Healthcare Lead Intelligence Platform",
+  "short_name": "LeadHealth",
+  "description": "Buy, sell, and manage verified healthcare leads. ACA, Medicare, and Final Expense lead marketplace with AI-powered demand intelligence.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1d4ed8",
+  "background_color": "#070d1a",
+  "theme_color": "#38bdf8",
   "icons": [
     {
       "src": "/favicon.ico",

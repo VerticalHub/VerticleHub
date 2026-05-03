@@ -1,5 +1,10 @@
 User-agent: *
 Allow: /
+Allow: /login
+Allow: /home
+Allow: /marketplace
+Disallow: /admin
+Disallow: /api/
 
 # Sitemap
-Sitemap: https://healthcareconnect.com/sitemap.xml
+Sitemap: https://www.leadhealth.co/sitemap.xml
