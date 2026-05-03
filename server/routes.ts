@@ -210,6 +210,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Users (admin) ─────────────────────────────────────────────────────────
+  // Update display name
+  app.patch("/api/users/:id/display-name", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { displayName } = req.body;
+      if (!displayName?.trim()) return res.status(400).json({ success: false, message: "Display name required" });
+      const updated = await storage.updateUserDisplayName(id, displayName.trim());
+      return res.json({ success: true, data: updated });
+    } catch (e) { return res.status(500).json({ success: false, message: "Failed to update display name" }); }
+  });
+
   app.get("/api/users", async (_req, res) => {
     try {
       const allUsers = await storage.getAllUsers();

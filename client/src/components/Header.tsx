@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, BarChart2, Shield, Bell, Keyboard, X, CheckCircle2, AlertTriangle, TrendingUp, Info, LogOut, DollarSign, Zap, LayoutDashboard, Menu, Upload, Gift, Sun, Moon } from "lucide-react";
+import { Activity, BarChart2, Shield, Bell, Keyboard, X, CheckCircle2, AlertTriangle, TrendingUp, Info, LogOut, DollarSign, Zap, LayoutDashboard, Menu, Upload, Gift, Sun, Moon, UserCircle } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -299,20 +299,30 @@ export default function Header() {
               )}
             </div>
 
-            {/* User chip */}
-            <div className="hidden md:flex items-center gap-2 bg-[#0d1526] border border-[#1e2d4a] rounded-sm px-3 py-1.5 cursor-pointer hover:border-[#2563eb] transition-colors group relative">
-              <div className="w-5 h-5 rounded-full bg-[#1a3a6b] flex items-center justify-center">
-                <span className="text-[10px] font-bold text-[#38bdf8]">{me?.username?.[0]?.toUpperCase() || "U"}</span>
+            {/* User chip with dropdown */}
+            <div className="hidden md:block relative group">
+              <div className="flex items-center gap-2 bg-[#0d1526] border border-[#1e2d4a] rounded-sm px-3 py-1.5 cursor-pointer hover:border-[#2563eb] transition-colors">
+                <div className="w-5 h-5 rounded-full bg-[#1a3a6b] flex items-center justify-center">
+                  <span className="text-[10px] font-bold text-[#38bdf8]">{me?.username?.[0]?.toUpperCase() || "U"}</span>
+                </div>
+                <div className="flex flex-col leading-none">
+                  <span className="text-[11px] font-mono text-[#94b4d4]">{me?.username?.toUpperCase() || "USER"}</span>
+                  <span className={`text-[9px] font-mono ${roleColor(me?.role)}`}>{(me?.role || "AGENT").toUpperCase()}</span>
+                </div>
               </div>
-              <div className="flex flex-col leading-none">
-                <span className="text-[11px] font-mono text-[#94b4d4]">{me?.username?.toUpperCase() || "USER"}</span>
-                <span className={`text-[9px] font-mono ${roleColor(me?.role)}`}>{(me?.role || "AGENT").toUpperCase()}</span>
+              {/* Dropdown */}
+              <div className="absolute right-0 top-full mt-1 w-44 bg-[#0d1526] border border-[#1e2d4a] rounded-sm shadow-xl z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150">
+                <Link href="/profile">
+                  <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-[#1a2a40] cursor-pointer border-b border-[#0a1120]">
+                    <UserCircle className="w-3.5 h-3.5 text-[#38bdf8]" />
+                    <span className="text-[10px] font-mono text-[#94b4d4]">MY PROFILE</span>
+                  </div>
+                </Link>
+                <button onClick={() => logoutMutation.mutate()} className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-[#1a2a40] transition-colors">
+                  <LogOut className="w-3.5 h-3.5 text-[#ff4d4d]" />
+                  <span className="text-[10px] font-mono text-[#ff4d4d]">SIGN OUT</span>
+                </button>
               </div>
-              <button onClick={() => logoutMutation.mutate()}
-                className="hidden group-hover:flex items-center gap-1 text-[9px] font-mono text-[#4a6080] hover:text-[#ff4d4d] transition-colors ml-1"
-                title="Sign out">
-                <LogOut className="w-3 h-3" />
-              </button>
             </div>
 
             {/* Mobile hamburger */}

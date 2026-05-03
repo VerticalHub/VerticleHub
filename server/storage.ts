@@ -133,6 +133,15 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // ── Users ──────────────────────────────────────────────────────────────────
+  async updateUserDisplayName(id: number, displayName: string) {
+    const [updated] = await db
+      .update(users)
+      .set({ displayName } as any)
+      .where(eq(users.id, id))
+      .returning();
+    return updated;
+  }
+
   async getUser(id: number) {
     const [u] = await db.select().from(users).where(eq(users.id, id));
     return u ?? undefined;

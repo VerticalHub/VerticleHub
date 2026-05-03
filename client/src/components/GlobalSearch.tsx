@@ -19,11 +19,12 @@ interface ResultItem {
 
 const NAV_ITEMS: ResultItem[] = [
   { id: "n-dash",    label: "Dashboard",       sub: "KPIs & pipeline overview",      icon: LayoutDashboard, color: "#38bdf8", category: "PAGES", action: g => g("/dashboard")   },
-  { id: "n-leads",   label: "Lead Operations", sub: "Full pipeline & analytics",      icon: Activity,        color: "#38bdf8", category: "PAGES", action: g => g("/leads")       },
+  { id: "n-leads",   label: "Lead Operations", sub: "Full pipeline & analytics",     icon: Activity,        color: "#38bdf8", category: "PAGES", action: g => g("/leads")       },
   { id: "n-mkt",     label: "Marketplace",     sub: "Order book & lead buying",      icon: BarChart2,       color: "#a78bfa", category: "PAGES", action: g => g("/marketplace") },
   { id: "n-sell",    label: "Sell Leads",      sub: "Submit leads for approval",     icon: Upload,          color: "#00d084", category: "PAGES", action: g => g("/sell")        },
   { id: "n-ref",     label: "Referrals",       sub: "Your referral code & earnings", icon: Gift,            color: "#fbbf24", category: "PAGES", action: g => g("/referrals")   },
   { id: "n-admin",   label: "Command Center",  sub: "Admin panel & analytics",       icon: Shield,          color: "#ff4d4d", category: "PAGES", action: g => g("/admin")       },
+  { id: "n-profile", label: "My Profile",      sub: "Account, history & settings",   icon: User,            color: "#38bdf8", category: "PAGES", action: g => g("/profile")     },
 ];
 
 const ACTION_ITEMS: ResultItem[] = [

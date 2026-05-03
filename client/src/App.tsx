@@ -14,6 +14,7 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import SellLeads from "@/pages/SellLeads";
 import Referrals from "@/pages/Referrals";
+import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
 import { Helmet } from "react-helmet";
 
@@ -56,6 +57,7 @@ function Router() {
       <Route path="/sell"        component={() => <AuthGuard><SellLeads /></AuthGuard>} />
       <Route path="/referrals"   component={() => <AuthGuard><Referrals /></AuthGuard>} />
       <Route path="/admin"       component={() => <AuthGuard><Admin /></AuthGuard>} />
+      <Route path="/profile"     component={() => <AuthGuard><Profile /></AuthGuard>} />
       <Route component={NotFound} />
     </Switch>
   );
