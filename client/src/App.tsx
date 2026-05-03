@@ -4,6 +4,7 @@ import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme";
+import OnboardingModal from "@/components/OnboardingModal";
 import Leads from "@/pages/Leads";
 import Home from "@/pages/Home";
 import ThankYou from "@/pages/ThankYou";
@@ -34,7 +35,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!data?.success && location !== "/login") return <Redirect to="/login" />;
-  return <>{children}</>;
+  return (
+    <>
+      <OnboardingModal />
+      {children}
+    </>
+  );
 }
 
 function Router() {
