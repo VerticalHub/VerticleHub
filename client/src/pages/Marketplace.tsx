@@ -41,6 +41,89 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   );
 }
 
+function BulkPurchaseModal({
+  listings, balance, onConfirm, onCancel, isPending,
+}: {
+  listings: any[]; balance: number; onConfirm: () => void; onCancel: () => void; isPending: boolean;
+}) {
+  const total = listings.reduce((s, l) => s + parseFloat(l.price), 0);
+  const remaining = balance - total;
+  const canAfford = balance >= total;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm fade-in">
+      <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm w-full max-w-lg mx-4 shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1e2d4a] bg-[#091220]">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4 text-[#00d084]" />
+            <span className="text-[11px] font-mono font-bold tracking-widest text-[#c8daf0]">BULK PURCHASE ORDER</span>
+          </div>
+          <button onClick={onCancel} className="text-[#2a4060] hover:text-[#ff4d4d] transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Lead list */}
+        <div className="max-h-56 overflow-y-auto divide-y divide-[#0a1120]">
+          {listings.map(l => {
+            const aiScore = l.leadData?.leadScore ?? l.qualityScore;
+            const tier = aiScore >= 80 ? { label: "PRIME", color: "#00d084" } : aiScore >= 60 ? { label: "GOOD", color: "#fbbf24" } : aiScore >= 40 ? { label: "FAIR", color: "#f97316" } : { label: "LOW", color: "#ff4d4d" };
+            return (
+              <div key={l.id} className="flex items-center justify-between px-5 py-2.5 hover:bg-[#0a1120]">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: { healthcare:"#38bdf8", medicare:"#a78bfa", insurance:"#fbbf24", final_expense:"#00d084" }[l.industry as string] || "#4a6080" }} />
+                  <div>
+                    <span className="text-[11px] font-mono text-[#94b4d4]">{l.industry?.toUpperCase()}</span>
+                    <span className="text-[10px] font-mono text-[#3a5070] ml-2">{l.geography}</span>
+                  </div>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm border" style={{ color: tier.color, borderColor: tier.color + "40", background: tier.color + "15" }}>{tier.label}</span>
+                </div>
+                <span className="text-[13px] font-mono font-bold text-[#00d084] num">${l.price}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Summary */}
+        <div className="px-5 py-4 border-t border-[#1e2d4a] space-y-2 bg-[#091220]">
+          <div className="flex justify-between text-[10px] font-mono">
+            <span className="text-[#4a6080]">LEADS SELECTED</span>
+            <span className="text-[#c8daf0] num">{listings.length}</span>
+          </div>
+          <div className="flex justify-between text-[10px] font-mono">
+            <span className="text-[#4a6080]">TOTAL COST</span>
+            <span className="text-[#c8daf0] num font-bold">${total.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-[10px] font-mono">
+            <span className="text-[#4a6080]">CURRENT BALANCE</span>
+            <span className="text-[#00d084] num">${balance.toFixed(2)}</span>
+          </div>
+          <div className="border-t border-[#1e2d4a] pt-2 flex justify-between text-[11px] font-mono font-bold">
+            <span className="text-[#4a6080]">BALANCE AFTER</span>
+            <span className={remaining >= 0 ? "text-[#00d084] num" : "text-[#ff4d4d] num"}>${remaining.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="px-5 py-3 flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-2.5 text-[10px] font-mono text-[#4a6080] border border-[#1e2d4a] hover:text-[#94b4d4] hover:border-[#2a4060] rounded-sm transition-colors">
+            CANCEL
+          </button>
+          <button onClick={onConfirm} disabled={!canAfford || isPending}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-[10px] font-mono font-bold rounded-sm border transition-colors ${canAfford ? "bg-[#0d3320] border-[#00d084] text-[#00d084] hover:bg-[#1a5040]" : "bg-[#0a0a0a] border-[#2a3040] text-[#3a4050] cursor-not-allowed"}`}>
+            {isPending ? (
+              <><div className="w-3 h-3 border border-[#00d084] border-t-transparent rounded-full animate-spin" /> PROCESSING...</>
+            ) : (
+              <><ShoppingCart className="w-3.5 h-3.5" /> CONFIRM BULK BUY · ${total.toFixed(2)}</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Marketplace() {
   const [tab, setTab]             = useState<Tab>("order-book");
   const [search, setSearch]       = useState("");
@@ -75,6 +158,18 @@ export default function Marketplace() {
     setFPriceMin(""); setFPriceMax(""); setFScoreMin(""); setFScoreMax("");
     setFLeadAge(""); setFTcpa("");
   };
+
+  // ── Bulk selection state ───────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds]       = useState<Set<number>>(new Set());
+  const [showBulkModal, setShowBulkModal]   = useState(false);
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+  const selectAll = (ids: number[]) => setSelectedIds(new Set(ids));
+  const clearSelection = () => setSelectedIds(new Set());
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -250,6 +345,25 @@ export default function Marketplace() {
     },
   });
 
+  const bulkPurchaseMutation = useMutation({
+    mutationFn: (listingIds: number[]) =>
+      apiRequest("POST", "/api/lead-listings/bulk-purchase", { listingIds, buyerId: 1 }),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-listings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/credits/1"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchases/1/detailed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts/unread"] });
+      const { purchased, errors } = res?.data || { purchased: [], errors: [] };
+      clearSelection();
+      setShowBulkModal(false);
+      if (purchased.length > 0)
+        toast({ title: `${purchased.length} lead${purchased.length > 1 ? "s" : ""} acquired`, description: `$${purchased.reduce((s: number, p: any) => s + parseFloat(p.pricePaid), 0).toFixed(2)} debited from your account.` });
+      if (errors.length > 0)
+        toast({ title: `${errors.length} item${errors.length > 1 ? "s" : ""} failed`, description: errors.map((e: any) => e.reason).join(", "), variant: "destructive" });
+    },
+    onError: () => toast({ title: "Bulk purchase failed", variant: "destructive" }),
+  });
+
   const geos = [...new Set(allListings.map(l => l.geography))].sort();
   const industries = [...new Set(allListings.map(l => l.industry))].sort();
 
@@ -271,6 +385,20 @@ export default function Marketplace() {
   return (
     <div className="min-h-screen bg-[#070d1a] flex flex-col">
       <Header />
+
+      {/* Bulk purchase modal */}
+      {showBulkModal && (() => {
+        const selListings = filtered.filter(l => selectedIds.has(l.id) && !purchases.some((p: any) => p.listingId === l.id) && l.isActive);
+        return (
+          <BulkPurchaseModal
+            listings={selListings}
+            balance={credits}
+            onConfirm={() => bulkPurchaseMutation.mutate(selListings.map(l => l.id))}
+            onCancel={() => setShowBulkModal(false)}
+            isPending={bulkPurchaseMutation.isPending}
+          />
+        );
+      })()}
 
       {/* Purchase confirm modal */}
       {confirmListing && (
@@ -512,6 +640,36 @@ export default function Marketplace() {
                 <span className="ml-auto text-[10px] font-mono text-[#3a5070] num">{filtered.length} / {allListings.length} listings</span>
               </div>
 
+              {/* Bulk action bar */}
+              {selectedIds.size > 0 && (() => {
+                const selListings = filtered.filter(l => selectedIds.has(l.id) && !purchases.some((p: any) => p.listingId === l.id));
+                const totalCost = selListings.reduce((s, l) => s + parseFloat(l.price), 0);
+                const canAffordAll = credits >= totalCost;
+                return (
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-[#0a1628] border border-[#2563eb50] rounded-sm fade-in">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono font-bold text-[#38bdf8] num">{selectedIds.size}</span>
+                      <span className="text-[10px] font-mono text-[#4a6080]">SELECTED</span>
+                    </div>
+                    <div className="w-px h-4 bg-[#1e2d4a]" />
+                    <span className="text-[10px] font-mono text-[#4a6080]">Total: <span className="text-[#00d084] font-bold num">${totalCost.toFixed(2)}</span></span>
+                    <div className="w-px h-4 bg-[#1e2d4a]" />
+                    {!canAffordAll && <span className="text-[9px] font-mono text-[#ff4d4d]">INSUFFICIENT BALANCE</span>}
+                    <div className="ml-auto flex items-center gap-2">
+                      <button onClick={clearSelection}
+                        className="px-3 py-1.5 text-[10px] font-mono text-[#4a6080] hover:text-[#94b4d4] border border-[#1e2d4a] hover:border-[#2a4060] rounded-sm transition-colors">
+                        CLEAR
+                      </button>
+                      <button onClick={() => setShowBulkModal(true)} disabled={!canAffordAll || selListings.length === 0}
+                        className={`flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-mono font-bold rounded-sm border transition-colors ${canAffordAll && selListings.length > 0 ? "bg-[#0d3320] border-[#00d084] text-[#00d084] hover:bg-[#1a5040]" : "bg-[#0a0a0a] border-[#2a3040] text-[#3a4050] cursor-not-allowed"}`}>
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        BUY {selListings.length} LEAD{selListings.length !== 1 ? "S" : ""}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Active filter chips */}
               {activeFilterCount > 0 && (
                 <div className="flex flex-wrap gap-1.5">
@@ -535,7 +693,21 @@ export default function Marketplace() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[#1e2d4a]">
-                      <th className="px-3 py-2.5"></th>
+                      {/* Select-all checkbox */}
+                      <th className="px-3 py-2.5 w-8">
+                        {(() => {
+                          const available = filtered.filter(l => !purchases.some((p: any) => p.listingId === l.id) && l.isActive);
+                          const allChecked = available.length > 0 && available.every(l => selectedIds.has(l.id));
+                          const someChecked = available.some(l => selectedIds.has(l.id));
+                          return (
+                            <div onClick={() => allChecked ? clearSelection() : selectAll(available.map(l => l.id))}
+                              className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${allChecked ? "bg-[#2563eb] border-[#2563eb]" : someChecked ? "bg-[#2563eb50] border-[#2563eb]" : "border-[#2a4060] hover:border-[#2563eb]"}`}>
+                              {(allChecked || someChecked) && <div className="w-2 h-0.5 bg-white rounded-full" />}
+                            </div>
+                          );
+                        })()}
+                      </th>
+                      <th className="px-3 py-2.5 w-8"></th>
                       {["INDUSTRY","GEO","PRICE","AI SCORE","QUALITY","VALUE","RESOLD","BADGES","ACTIONS"].map(h => (
                         <th key={h} className="px-3 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070] whitespace-nowrap">{h}</th>
                       ))}
@@ -556,8 +728,18 @@ export default function Marketplace() {
                       const watched = watchlistIds.has(l.id);
                       const canAfford = credits >= parseFloat(l.price);
                       const aiScore = l.leadData?.leadScore ?? l.qualityScore;
+                      const isSelected = selectedIds.has(l.id);
                       return (
-                        <tr key={l.id} className={`hover:bg-[#0a1628] transition-colors group ${owned ? "opacity-60" : ""}`}>
+                        <tr key={l.id} className={`hover:bg-[#0a1628] transition-colors group ${owned ? "opacity-60" : ""} ${isSelected ? "bg-[#0a1628] border-l-2 border-[#2563eb]" : ""}`}>
+                          {/* Row checkbox */}
+                          <td className="px-3 py-3">
+                            {!owned && l.isActive && (
+                              <div onClick={() => toggleSelect(l.id)}
+                                className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${isSelected ? "bg-[#2563eb] border-[#2563eb]" : "border-[#2a4060] hover:border-[#2563eb]"}`}>
+                                {isSelected && <div className="w-2 h-2 rounded-sm bg-white" />}
+                              </div>
+                            )}
+                          </td>
                           {/* Watchlist heart */}
                           <td className="px-3 py-3">
                             <button onClick={() => watchlistMutation.mutate({ listingId: l.id })}

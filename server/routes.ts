@@ -707,6 +707,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to purchase lead" }); }
   });
 
+  // ── Bulk Purchase ──────────────────────────────────────────────────────────
+  app.post("/api/lead-listings/bulk-purchase", async (req, res) => {
+    try {
+      const { listingIds, buyerId } = req.body;
+      if (!Array.isArray(listingIds) || !listingIds.length)
+        return res.status(400).json({ success: false, message: "No listings selected" });
+
+      const account = await storage.getCreditAccount(buyerId);
+      if (!account) return res.status(404).json({ success: false, message: "Account not found" });
+
+      const results: any[] = [];
+      const errors: any[]  = [];
+
+      for (const listingId of listingIds) {
+        const listing = await storage.getLeadListingById(listingId);
+        if (!listing?.isActive) { errors.push({ listingId, reason: "Not available" }); continue; }
+        const lead = await storage.getLeadById(listing.leadId);
+        if (lead?.dnc)            { errors.push({ listingId, reason: "DNC" }); continue; }
+        const alreadyOwned = await storage.hasPurchasedLead(buyerId, listing.leadId);
+        if (alreadyOwned)         { errors.push({ listingId, reason: "Already owned" }); continue; }
+        if (parseFloat(account.balance) < parseFloat(listing.price))
+          { errors.push({ listingId, reason: "Insufficient credits" }); continue; }
+
+        const purchase = await storage.purchaseLead({ listingId, buyerId, price: listing.price, qualityAtPurchase: listing.qualityScore });
+        await storage.updateCreditBalance(buyerId, `-${listing.price}`);
+        await storage.addCreditTransaction({ userId: buyerId, type: "spend", amount: listing.price, description: `Bulk purchase — listing #${listingId}` });
+        // refresh balance
+        const refreshed = await storage.getCreditAccount(buyerId);
+        if (refreshed) account.balance = refreshed.balance;
+        results.push(purchase);
+      }
+
+      if (results.length > 0) {
+        const totalSpent = results.reduce((s, p) => s + parseFloat(p.pricePaid), 0);
+        await storage.createAlert({ userId: buyerId, type: "purchase", title: "BULK ORDER FILLED", body: `${results.length} lead${results.length > 1 ? "s" : ""} acquired — $${totalSpent.toFixed(2)} debited`, leadId: null, read: false });
+      }
+
+      return res.json({ success: true, data: { purchased: results, errors } });
+    } catch (e) { return res.status(500).json({ success: false, message: "Bulk purchase failed" }); }
+  });
+
   // ── Purchases ─────────────────────────────────────────────────────────────
   app.get("/api/purchases/:userId", async (req, res) => {
     try {
