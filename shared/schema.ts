@@ -1,6 +1,13 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, json, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// ── Sessions (managed by connect-pg-simple) ──────────────────────────────────
+export const session = pgTable("session", {
+  sid: varchar("sid").primaryKey(),
+  sess: json("sess").notNull(),
+  expire: timestamp("expire", { precision: 6 }).notNull(),
+});
 
 // ── Users ──────────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
@@ -10,6 +17,7 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   role: text("role").notNull().default("agent"), // agent | manager | admin
   referralCode: text("referral_code").unique(),
+  displayName: text("display_name"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
