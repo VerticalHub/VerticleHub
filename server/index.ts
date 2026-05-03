@@ -10,19 +10,27 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction && !process.env.SESSION_SECRET) {
+  console.error("[fatal] SESSION_SECRET environment variable must be set in production");
+  process.exit(1);
+}
+
 app.use(session({
   store: new PgSession({
     conString: process.env.DATABASE_URL,
     tableName: "session",
     createTableIfMissing: true,
   }),
-  secret: process.env.SESSION_SECRET || "healthlead-pro-secret-key-2025",
+  secret: process.env.SESSION_SECRET || "healthlead-pro-dev-secret-do-not-use-in-production",
   resave: false,
   saveUninitialized: false,
   cookie: {
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     httpOnly: true,
-    secure: false,
+    secure: isProduction,
+    sameSite: "lax",
   },
 }));
 

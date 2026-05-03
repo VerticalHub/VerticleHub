@@ -149,7 +149,9 @@ async function seedDatabase() {
 
 // ─── Routes ────────────────────────────────────────────────────────────────────
 export async function registerRoutes(app: Express): Promise<Server> {
-  await seedDatabase();
+  if (process.env.SEED_DEMO_DATA === "true") {
+    await seedDatabase();
+  }
   startAgingJob();
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -161,6 +163,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) return res.status(401).json({ success: false, message: "Invalid credentials" });
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) return res.status(401).json({ success: false, message: "Invalid credentials" });
+      await new Promise<void>((resolve, reject) =>
+        req.session.regenerate((err) => (err ? reject(err) : resolve()))
+      );
       (req.session as any).userId = user.id;
       (req.session as any).role   = user.role;
       return res.json({ success: true, data: { id: user.id, username: user.username, role: user.role, email: user.email } });
@@ -169,14 +174,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { username, password, email, role, refCode } = req.body;
+      const { username, password, email, refCode } = req.body;
       if (!username || !password) return res.status(400).json({ success: false, message: "Username and password required" });
       const existing = await storage.getUserByUsername(username);
       if (existing) return res.status(409).json({ success: false, message: "Username already taken" });
       const hash = await bcrypt.hash(password, 10);
       // Generate a unique referral code for this new user
       const newCode = username.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) + Math.random().toString(36).slice(2, 5).toUpperCase();
-      const user = await storage.createUser({ username, password: hash, email: email || null, role: role || "agent", referralCode: newCode });
+      const user = await storage.createUser({ username, password: hash, email: email || null, role: "agent", referralCode: newCode });
       // Credit the referrer $25 if a valid referral code was provided
       if (refCode) {
         const referrer = await storage.getUserByReferralCode(refCode);
@@ -190,6 +195,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createAlert({ userId: referrer.id, type: "purchase", title: "REFERRAL BONUS EARNED", body: `${username} registered using your referral code. $25.00 added to your account!`, leadId: null, read: false });
         }
       }
+      await new Promise<void>((resolve, reject) =>
+        req.session.regenerate((err) => (err ? reject(err) : resolve()))
+      );
       (req.session as any).userId = user.id;
       (req.session as any).role   = user.role;
       return res.status(201).json({ success: true, data: { id: user.id, username: user.username, role: user.role } });
