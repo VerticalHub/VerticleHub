@@ -62,6 +62,7 @@ export default function SellLeads() {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions/mine"] });
       setSubmitted(true);
       setForm(empty);
+      toast({ title: "Lead submitted!", description: "Your lead is in the admin review queue. You'll be notified when it goes live.", variant: "success" as any });
     },
     onError: () => toast({ title: "Submission failed", description: "Please check your details and try again.", variant: "destructive" }),
   });

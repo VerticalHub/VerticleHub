@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Copy, CheckCheck, Users, DollarSign, Gift, Share2, Link2, TrendingUp, Star } from "lucide-react";
 import Header from "@/components/Header";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Referrals() {
   const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
 
   const { data: meResp } = useQuery<any>({
     queryKey: ["/api/auth/me"],
@@ -27,11 +29,13 @@ export default function Referrals() {
     navigator.clipboard.writeText(refCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    toast({ title: "Code copied!", description: `Referral code ${refCode} is on your clipboard.`, variant: "success" as any });
   };
   const copyLink = () => {
     navigator.clipboard.writeText(refLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    toast({ title: "Link copied!", description: "Share it anywhere — you earn $25 per signup.", variant: "success" as any });
   };
 
   return (

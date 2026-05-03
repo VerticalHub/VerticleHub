@@ -211,6 +211,11 @@ export default function Marketplace() {
     a.download = `marketplace-leads-${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    toast({
+      title: "Export complete",
+      description: `${filtered.length} lead${filtered.length !== 1 ? "s" : ""} exported to CSV.`,
+      variant: "success" as any,
+    });
   };
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -346,7 +351,7 @@ export default function Marketplace() {
       queryClient.invalidateQueries({ queryKey: ["/api/purchases/1/detailed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/alerts/unread"] });
       setConfirm(null);
-      toast({ title: "Lead acquired", description: "Lead added to your portfolio." });
+      toast({ title: "Lead acquired", description: "Lead added to your portfolio.", variant: "success" as any });
     },
     onError: (err: any) => {
       toast({ title: "Purchase failed", description: err?.message || "Could not complete purchase.", variant: "destructive" });
@@ -359,7 +364,7 @@ export default function Marketplace() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["/api/watchlist"] });
       const now = watchlistIds.has(vars.listingId);
-      toast({ title: now ? "Removed from watchlist" : "Added to watchlist" });
+      toast({ title: now ? "Removed from watchlist" : "Added to watchlist", description: now ? "Lead removed from your saved list." : "Lead saved to your watchlist.", variant: now ? "default" : "success" as any });
     },
   });
 
@@ -374,7 +379,7 @@ export default function Marketplace() {
       queryClient.invalidateQueries({ queryKey: ["/api/price-alerts"] });
       setShowAlertForm(false);
       setAlertForm({ industry: "medicare", geography: "FL", targetPrice: "" });
-      toast({ title: "Price alert created", description: "We'll notify you when a match appears." });
+      toast({ title: "Price alert created", description: "We'll notify you when a match appears.", variant: "success" as any });
     },
   });
 
@@ -383,7 +388,7 @@ export default function Marketplace() {
       apiRequest("POST", "/api/credits/purchase", { userId: 1, packageId, amount }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/credits/1"] });
-      toast({ title: "Credits deposited" });
+      toast({ title: "Credits deposited", description: "Your account balance has been updated.", variant: "success" as any });
     },
   });
 
@@ -849,12 +854,17 @@ export default function Marketplace() {
                                 <span className="text-[10px] font-mono text-[#4a6080]">OWNED</span>
                               ) : (
                                 <button
-                                  onClick={() => setConfirm(l)}
-                                  disabled={!canAfford}
+                                  onClick={() => {
+                                    if (!canAfford) {
+                                      toast({ title: "Insufficient funds", description: `You need $${l.price} but have $${credits.toFixed(2)}. Add credits to continue.`, variant: "warning" as any });
+                                      return;
+                                    }
+                                    setConfirm(l);
+                                  }}
                                   className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono font-bold rounded-sm transition-colors whitespace-nowrap ${
                                     canAfford
                                       ? "bg-[#0d1e3a] border border-[#2563eb] text-[#38bdf8] hover:bg-[#1a3a6b]"
-                                      : "bg-[#0a0a0a] border border-[#2a3040] text-[#3a4050] cursor-not-allowed"
+                                      : "bg-[#0a0a0a] border border-[#2a3040] text-[#3a4050] hover:border-[#ff4d4d40] cursor-pointer"
                                   }`}>
                                   <ShoppingCart className="w-3 h-3" />
                                   BUY ${l.price}
