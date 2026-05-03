@@ -5,6 +5,7 @@ import { useTheme } from "@/lib/theme";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import CommandPalette from "./CommandPalette";
+import GlobalSearch from "./GlobalSearch";
 
 interface TickerItem {
   label: string; value: string; change: string; up: boolean; raw: number;
@@ -186,7 +187,7 @@ export default function Header() {
 
         {/* Nav bar */}
         <div className="flex items-center justify-between px-4 py-1.5">
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-4">
             {/* Logo */}
             <Link href="/dashboard">
               <div className="flex items-center gap-2 cursor-pointer flex-shrink-0">
@@ -199,6 +200,9 @@ export default function Header() {
                 </div>
               </div>
             </Link>
+
+            {/* Global search */}
+            <GlobalSearch />
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center">
@@ -229,13 +233,6 @@ export default function Header() {
             <div className="hidden lg:block text-[11px] font-mono text-[#4a6080] num">
               {time.toLocaleTimeString("en-US", { hour12: false })} EST
             </div>
-
-            {/* Cmd+K */}
-            <button onClick={() => setCmdOpen(true)}
-              className="hidden md:flex items-center gap-1.5 border border-[#1e2d4a] rounded-sm px-2.5 py-1 hover:border-[#2563eb] hover:text-[#38bdf8] transition-colors text-[#4a6080]">
-              <Keyboard className="w-3 h-3" />
-              <span className="text-[9px] font-mono">⌘K</span>
-            </button>
 
             {/* Theme toggle */}
             <button
