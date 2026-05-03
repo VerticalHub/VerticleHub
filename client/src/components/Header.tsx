@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, BarChart2, Shield, Bell, Keyboard, X, CheckCircle2, AlertTriangle, TrendingUp, Info, LogOut, DollarSign, Zap, LayoutDashboard, Menu, Upload, Gift } from "lucide-react";
+import { Activity, BarChart2, Shield, Bell, Keyboard, X, CheckCircle2, AlertTriangle, TrendingUp, Info, LogOut, DollarSign, Zap, LayoutDashboard, Menu, Upload, Gift, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/lib/theme";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import CommandPalette from "./CommandPalette";
@@ -69,6 +70,7 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const { theme, toggle } = useTheme();
 
   const { data: alertsResp } = useQuery<any>({
     queryKey: ["/api/alerts/unread"],
@@ -233,6 +235,16 @@ export default function Header() {
               className="hidden md:flex items-center gap-1.5 border border-[#1e2d4a] rounded-sm px-2.5 py-1 hover:border-[#2563eb] hover:text-[#38bdf8] transition-colors text-[#4a6080]">
               <Keyboard className="w-3 h-3" />
               <span className="text-[9px] font-mono">⌘K</span>
+            </button>
+
+            {/* Theme toggle */}
+            <button
+              onClick={toggle}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="p-1.5 hover:bg-[#0d1526] rounded-sm transition-colors text-[#4a6080] hover:text-[#94b4d4]">
+              {theme === "dark"
+                ? <Sun className="w-4 h-4" />
+                : <Moon className="w-4 h-4" />}
             </button>
 
             {/* Bell */}

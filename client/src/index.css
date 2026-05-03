@@ -241,3 +241,128 @@
 .pipeline-bar {
   transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE OVERRIDES
+   Target: [data-theme="light"] on <html>
+   Strategy: Class-selector overrides for every Tailwind arbitrary hex value
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Root/Body ──────────────────────────────────────────────────────────── */
+[data-theme="light"] body {
+  background-color: #f0f4fa !important;
+  color: #0d1a30 !important;
+}
+
+/* ── Background overrides ────────────────────────────────────────────────── */
+[data-theme="light"] .bg-\[\#070d1a\] { background-color: #f0f4fa !important; }
+[data-theme="light"] .bg-\[\#060e1c\] { background-color: #e8eef8 !important; }
+[data-theme="light"] .bg-\[\#0d1526\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#0a1120\] { background-color: #edf2fb !important; }
+[data-theme="light"] .bg-\[\#0a1628\] { background-color: #e8f0fc !important; }
+[data-theme="light"] .bg-\[\#0a1a2a\] { background-color: #dceaf8 !important; }
+[data-theme="light"] .bg-\[\#0d1a2d\] { background-color: #ddeeff !important; }
+[data-theme="light"] .bg-\[\#0d1e3a\] { background-color: #dbeafe !important; }
+[data-theme="light"] .bg-\[\#0d1e35\] { background-color: #dbeafe !important; }
+[data-theme="light"] .bg-\[\#091220\] { background-color: #eef3ff !important; }
+[data-theme="light"] .bg-\[\#0f1e35\] { background-color: #e2eeff !important; }
+[data-theme="light"] .bg-\[\#0a0a0a\] { background-color: #f5f5f5 !important; }
+[data-theme="light"] .bg-\[\#001a0d\] { background-color: #dcfbef !important; }
+[data-theme="light"] .bg-\[\#0a2a1a\] { background-color: #d4f7e8 !important; }
+[data-theme="light"] .bg-\[\#0d3320\] { background-color: #c8f0da !important; }
+[data-theme="light"] .bg-\[\#1a5040\] { background-color: #b0e8cc !important; }
+[data-theme="light"] .bg-\[\#0d3d22\] { background-color: #c0ecd4 !important; }
+[data-theme="light"] .bg-\[\#1a3a6b\] { background-color: #bfdbfe !important; }
+[data-theme="light"] .bg-\[\#1a0808\] { background-color: #fee2e2 !important; }
+[data-theme="light"] .bg-\[\#1f0a0a\] { background-color: #fee2e2 !important; }
+[data-theme="light"] .bg-\[\#1a0707\] { background-color: #fde8e8 !important; }
+[data-theme="light"] .bg-\[\#2e0a0a\] { background-color: #fdd0d0 !important; }
+[data-theme="light"] .bg-\[\#2a0000\] { background-color: #fcc8c8 !important; }
+[data-theme="light"] .bg-\[\#1a0000\] { background-color: #fde8e8 !important; }
+[data-theme="light"] .bg-\[\#1a1200\] { background-color: #fef9c3 !important; }
+[data-theme="light"] .bg-\[\#1a1400\] { background-color: #fef3c7 !important; }
+[data-theme="light"] .bg-\[\#1a1207\] { background-color: #fef9e7 !important; }
+[data-theme="light"] .bg-\[\#1a0d3a\] { background-color: #ede9fe !important; }
+[data-theme="light"] .bg-\[\#1a0a2a\] { background-color: #f3e8ff !important; }
+[data-theme="light"] .bg-\[\#0d1e0d\] { background-color: #dcfce7 !important; }
+[data-theme="light"] .bg-\[\#1e2d4a\] { background-color: #dce7f8 !important; }
+[data-theme="light"] .bg-\[\#2a4060\] { background-color: #c8daee !important; }
+[data-theme="light"] .bg-\[\#2563eb50\] { background-color: rgba(37,99,235,0.15) !important; }
+[data-theme="light"] .bg-\[\#00d08415\] { background-color: rgba(0,208,132,0.12) !important; }
+
+/* ── Border overrides ────────────────────────────────────────────────────── */
+[data-theme="light"] .border-\[\#1e2d4a\] { border-color: #c0d0e8 !important; }
+[data-theme="light"] .border-\[\#1a2a42\] { border-color: #cad8ee !important; }
+[data-theme="light"] .border-\[\#0f1a2e\] { border-color: #d8e6f4 !important; }
+[data-theme="light"] .border-\[\#2a4060\] { border-color: #a8c0da !important; }
+[data-theme="light"] .border-\[\#2a3040\] { border-color: #b8c8da !important; }
+[data-theme="light"] .border-\[\#2a3a5a\] { border-color: #b0c4de !important; }
+[data-theme="light"] .border-\[\#2a3d5a\] { border-color: #b0c4de !important; }
+[data-theme="light"] .border-\[\#1e3a5f\] { border-color: #b8d0ea !important; }
+[data-theme="light"] .border-\[\#1e3a1a\] { border-color: #b4e4c0 !important; }
+
+/* ── Text overrides ──────────────────────────────────────────────────────── */
+[data-theme="light"] .text-\[\#c8daf0\]  { color: #1a2840 !important; }
+[data-theme="light"] .text-\[\#94b4d4\]  { color: #2a4a70 !important; }
+[data-theme="light"] .text-\[\#4a6080\]  { color: #4a6080 !important; }
+[data-theme="light"] .text-\[\#3a5070\]  { color: #5a7090 !important; }
+[data-theme="light"] .text-\[\#2a4060\]  { color: #7090b0 !important; }
+[data-theme="light"] .text-\[\#1e2d4a\]  { color: #8090b0 !important; }
+[data-theme="light"] .text-\[\#3a4050\]  { color: #8090a0 !important; }
+[data-theme="light"] .text-\[\#070d1a\]  { color: #f0f4fa !important; }
+
+/* ── Divide colors ───────────────────────────────────────────────────────── */
+[data-theme="light"] .divide-\[\#0a1120\] > * + * { border-color: #dde7f5 !important; }
+[data-theme="light"] .divide-\[\#0d1526\] > * + * { border-color: #e8eef8 !important; }
+
+/* ── Hover backgrounds ───────────────────────────────────────────────────── */
+[data-theme="light"] .hover\:bg-\[\#0d1526\]:hover  { background-color: #eef3fc !important; }
+[data-theme="light"] .hover\:bg-\[\#0a1628\]:hover  { background-color: #e4edfb !important; }
+[data-theme="light"] .hover\:bg-\[\#0f1e35\]:hover  { background-color: #dde8fa !important; }
+[data-theme="light"] .hover\:bg-\[\#1a3a6b\]:hover  { background-color: #b8d0fe !important; }
+[data-theme="light"] .hover\:bg-\[\#1a5040\]:hover  { background-color: #a8e0c4 !important; }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+[data-theme="light"] ::-webkit-scrollbar-track { background: #e8eef8; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #94b4d4; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #2563eb; }
+
+/* ── Shimmer ─────────────────────────────────────────────────────────────── */
+[data-theme="light"] .shimmer {
+  background: linear-gradient(90deg, #e8eef8 0px, #f4f8ff 80px, #e8eef8 160px);
+}
+
+/* ── Recharts tooltip ────────────────────────────────────────────────────── */
+[data-theme="light"] .recharts-default-tooltip {
+  background: #ffffff !important;
+  border: 1px solid #c0d0e8 !important;
+  color: #1a2840 !important;
+}
+
+/* ── Input / Select / Textarea ───────────────────────────────────────────── */
+[data-theme="light"] input:not([type="checkbox"]),
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background-color: #f8fbff !important;
+  border-color: #c0d0e8 !important;
+  color: #1a2840 !important;
+}
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder { color: #8090b0 !important; }
+
+/* ── Misc structural helpers ─────────────────────────────────────────────── */
+[data-theme="light"] .min-h-screen { background-color: #f0f4fa; }
+
+/* ── Theme toggle button (always visible in both themes) ─────────────────── */
+[data-theme="light"] .text-\[\#4a6080\] { color: #4a6080 !important; }
+[data-theme="light"] .hover\:text-\[\#94b4d4\]:hover { color: #2a4a70 !important; }
+
+/* ── Transition: smooth theme switch ─────────────────────────────────────── */
+*, *::before, *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+}
+/* Exclude animations from the transition override */
+.ticker-track, .shimmer, .blink, .pulse-green, .pulse-blue, .pulse-red, .pulse-amber,
+.fade-in, .slide-down, .pipeline-bar, .lead-score-bar {
+  transition: none !important;
+}

@@ -3,6 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "@/lib/theme";
 import Leads from "@/pages/Leads";
 import Home from "@/pages/Home";
 import ThankYou from "@/pages/ThankYou";
@@ -57,6 +58,7 @@ function Router() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
       <TooltipProvider>
         <Helmet>
           <title>HealthLead Pro | Healthcare Lead Intelligence Platform</title>
@@ -68,6 +70,7 @@ export default function App() {
         <Toaster />
         <Router />
       </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
