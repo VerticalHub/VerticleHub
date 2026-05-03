@@ -13,6 +13,7 @@ import {
   ShoppingCart, TrendingUp, Star, Award, AlertTriangle, Package,
   DollarSign, Filter, Search, Bell, Heart, HeartOff, BellOff, BellRing,
   ArrowUpDown, Zap, X, SlidersHorizontal, ChevronDown, ChevronUp, RotateCcw,
+  Download,
 } from "lucide-react";
 
 const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
@@ -170,6 +171,42 @@ export default function Marketplace() {
   });
   const selectAll = (ids: number[]) => setSelectedIds(new Set(ids));
   const clearSelection = () => setSelectedIds(new Set());
+
+  // ── CSV export (client-side, respects active filters) ─────────────────────
+  const handleExportCSV = () => {
+    const headers = [
+      "Listing ID","Lead ID","Industry","Geography","Price","AI Score","Quality Score",
+      "Value Score","Times Resold","Featured","Active","State","DOB","Age",
+      "Interested Medicare","Interested ACA","Interested Final Expense",
+      "TCPA Consent","Source","Lead Captured","Listing Created",
+    ];
+    const rows = filtered.map(l => {
+      const ld = l.leadData;
+      const age = ld?.dateOfBirth
+        ? Math.floor((Date.now() - new Date(ld.dateOfBirth).getTime()) / (365.25 * 86_400_000))
+        : "";
+      return [
+        l.id, l.leadId ?? "", l.industry, l.geography, l.price,
+        ld?.leadScore ?? "", l.qualityScore, valueScore(l.qualityScore, l.price),
+        l.timesResold, l.featured ? "Y" : "N", l.isActive ? "Y" : "N",
+        ld?.state ?? "", ld?.dateOfBirth ?? "", age,
+        ld?.interestedInMedicare ? "Y" : "N",
+        ld?.interestedInACA ? "Y" : "N",
+        ld?.interestedInFinalExpense ? "Y" : "N",
+        ld?.tcpaConsent ? "Y" : "N", ld?.source ?? "",
+        ld?.createdAt ? new Date(ld.createdAt).toISOString() : "",
+        l.createdAt ? new Date(l.createdAt).toISOString() : "",
+      ].join(",");
+    });
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `marketplace-leads-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -637,7 +674,14 @@ export default function Marketplace() {
                   <option value="newest">SORT: NEWEST</option>
                   <option value="oldest">SORT: OLDEST</option>
                 </select>
-                <span className="ml-auto text-[10px] font-mono text-[#3a5070] num">{filtered.length} / {allListings.length} listings</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-[#3a5070] num">{filtered.length} / {allListings.length} listings</span>
+                  <button onClick={handleExportCSV} title="Export filtered listings as CSV"
+                    className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono text-[#4a6080] hover:text-[#00d084] border border-[#1e2d4a] hover:border-[#00d08440] bg-[#060e1c] rounded-sm transition-colors">
+                    <Download className="w-3.5 h-3.5" />
+                    CSV
+                  </button>
+                </div>
               </div>
 
               {/* Bulk action bar */}
