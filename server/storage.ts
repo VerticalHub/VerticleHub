@@ -1,7 +1,7 @@
 import { 
   users, leads, creditAccounts, creditTransactions, creditPackages,
   leadListings, leadPurchases, leadQualityDecay, demandPredictions, marketTrends,
-  alerts, leadActivities, watchlist, priceAlerts,
+  alerts, leadActivities, watchlist, priceAlerts, leadSubmissions,
   type User, type InsertUser, type Lead, type InsertLead,
   type CreditAccount, type InsertCreditAccount, type CreditTransaction, type InsertCreditTransaction,
   type CreditPackage, type InsertCreditPackage, type LeadListing, type InsertLeadListing,
@@ -9,6 +9,7 @@ import {
   type DemandPrediction, type InsertDemandPrediction, type MarketTrend, type InsertMarketTrend,
   type Alert, type InsertAlert, type LeadActivity, type InsertLeadActivity,
   type Watchlist, type InsertWatchlist, type PriceAlert, type InsertPriceAlert,
+  type LeadSubmission, type InsertLeadSubmission,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, or, ilike, ne } from "drizzle-orm";
@@ -114,6 +115,12 @@ export interface IStorage {
   getLatestDemandPrediction(industry: string, geography: string): Promise<DemandPrediction | undefined>;
   saveMarketTrend(trend: InsertMarketTrend): Promise<MarketTrend>;
   getMarketTrends(industry?: string, geography?: string, days?: number): Promise<MarketTrend[]>;
+
+  // Seller Submissions
+  createSubmission(sub: InsertLeadSubmission): Promise<LeadSubmission>;
+  getAllSubmissions(): Promise<LeadSubmission[]>;
+  getSubmissionsByUser(userId: number): Promise<LeadSubmission[]>;
+  updateSubmissionStatus(id: number, status: string, adminNotes: string, reviewedBy: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -505,6 +512,28 @@ export class DatabaseStorage implements IStorage {
   async getAllLeadListingsEnriched() {
     const raw = await this.getAllLeadListings();
     return this._enrichListings(raw);
+  }
+
+  // ── Seller Submissions ────────────────────────────────────────────────────
+  async createSubmission(sub: InsertLeadSubmission) {
+    const [row] = await db.insert(leadSubmissions).values(sub).returning();
+    return row;
+  }
+  async getAllSubmissions() {
+    return db.select().from(leadSubmissions).orderBy(desc(leadSubmissions.createdAt));
+  }
+  async getSubmissionsByUser(userId: number) {
+    return db.select().from(leadSubmissions)
+      .where(eq(leadSubmissions.submittedBy, userId))
+      .orderBy(desc(leadSubmissions.createdAt));
+  }
+  async updateSubmissionStatus(id: number, status: string, adminNotes: string, reviewedBy: number) {
+    await db.update(leadSubmissions).set({
+      status,
+      adminNotes,
+      reviewedBy,
+      reviewedAt: new Date(),
+    }).where(eq(leadSubmissions.id, id));
   }
 }
 

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Download, Shield, BarChart2, Plus, Activity,
   ChevronDown, ChevronRight, CheckSquare, Square, Users, TrendingUp,
-  PhoneOff, RefreshCw, Edit3, Cpu,
+  PhoneOff, RefreshCw, Edit3, Cpu, Upload, CheckCircle2, XCircle, Clock,
 } from "lucide-react";
 import Header from "@/components/Header";
 import { apiRequest } from "@/lib/queryClient";
@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import ScoreBadge from "@/components/ScoreBadge";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from "recharts";
 
-type Tab = "overview" | "leads" | "listings" | "new" | "market" | "users";
+type Tab = "overview" | "leads" | "listings" | "new" | "market" | "users" | "submissions";
 
 const STATUS_OPTS = ["new", "contacted", "qualified", "converted", "archived"];
 const STATUS_COLORS: Record<string, string> = {
@@ -162,13 +162,35 @@ export default function Admin() {
     onError: () => toast({ title: "Rescore failed", variant: "destructive" }),
   });
 
-  const tabs: { id: Tab; label: string; icon: any }[] = [
-    { id: "overview", label: "OVERVIEW",     icon: BarChart2  },
-    { id: "leads",    label: "LEAD DB",      icon: Activity   },
-    { id: "listings", label: "LISTINGS",     icon: Shield     },
-    { id: "new",      label: "NEW LISTING",  icon: Plus       },
-    { id: "market",   label: "MARKET DATA",  icon: TrendingUp },
-    { id: "users",    label: "USERS",        icon: Users      },
+  const { data: subsResp } = useQuery<any>({
+    queryKey: ["/api/submissions"],
+    queryFn: () => fetch("/api/submissions").then(r => r.json()),
+    enabled: tab === "submissions",
+  });
+  const allSubs: any[] = subsResp?.data || [];
+  const pendingCount = allSubs.filter((s: any) => s.status === "pending").length;
+
+  const [subAdminNotes, setSubAdminNotes] = useState<Record<number, string>>({});
+  const reviewMutation = useMutation({
+    mutationFn: ({ id, status, adminNotes }: { id: number; status: string; adminNotes: string }) =>
+      apiRequest("PATCH", `/api/submissions/${id}/review`, { status, adminNotes }),
+    onSuccess: (_, { status }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-listings/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads/stats"] });
+      toast({ title: status === "approved" ? "Submission approved — lead live!" : "Submission rejected" });
+    },
+    onError: () => toast({ title: "Review failed", variant: "destructive" }),
+  });
+
+  const tabs: { id: Tab; label: string; icon: any; badge?: number }[] = [
+    { id: "overview",     label: "OVERVIEW",     icon: BarChart2  },
+    { id: "leads",        label: "LEAD DB",      icon: Activity   },
+    { id: "listings",     label: "LISTINGS",     icon: Shield     },
+    { id: "new",          label: "NEW LISTING",  icon: Plus       },
+    { id: "market",       label: "MARKET DATA",  icon: TrendingUp },
+    { id: "users",        label: "USERS",        icon: Users      },
+    { id: "submissions",  label: "SUBMISSIONS",  icon: Upload     },
   ];
 
   const stateChartData = stats
@@ -198,6 +220,9 @@ export default function Admin() {
               }`}>
               <t.icon className="w-3.5 h-3.5" />
               {t.label}
+              {t.id === "submissions" && pendingCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[8px] font-bold bg-[#fbbf24] text-[#070d1a] rounded-full leading-none">{pendingCount}</span>
+              )}
             </button>
           ))}
         </div>
@@ -720,6 +745,110 @@ export default function Admin() {
             </div>
           </div>
         )}
+        {/* ── SUBMISSIONS ─────────────────────────────────────────────── */}
+        {tab === "submissions" && (
+          <div className="fade-in space-y-4">
+            {/* Summary */}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "PENDING REVIEW", value: allSubs.filter((s:any) => s.status==="pending").length,  color: "text-[#fbbf24]" },
+                { label: "APPROVED",       value: allSubs.filter((s:any) => s.status==="approved").length, color: "text-[#00d084]" },
+                { label: "REJECTED",       value: allSubs.filter((s:any) => s.status==="rejected").length, color: "text-[#ff4d4d]" },
+              ].map(k => (
+                <div key={k.label} className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+                  <div className={`text-[24px] font-mono font-bold num ${k.color}`}>{k.value}</div>
+                  <div className="text-[9px] font-mono text-[#3a5070] mt-1">{k.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {allSubs.length === 0 ? (
+              <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-12 text-center">
+                <Upload className="w-8 h-8 text-[#2a4060] mx-auto mb-3" />
+                <p className="text-[11px] font-mono text-[#2a4060]">No submissions yet. Sellers submit leads via the Sell Leads page.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {allSubs.map((s: any) => (
+                  <div key={s.id} className={`bg-[#0d1526] border rounded-sm p-4 ${
+                    s.status==="pending" ? "border-[#fbbf2440]" : s.status==="approved" ? "border-[#00d08430]" : "border-[#ff4d4d30]"
+                  }`}>
+                    <div className="flex items-start gap-4">
+                      {/* Status icon */}
+                      <div className="mt-0.5 flex-shrink-0">
+                        {s.status==="approved" ? <CheckCircle2 className="w-5 h-5 text-[#00d084]" />
+                          : s.status==="rejected" ? <XCircle className="w-5 h-5 text-[#ff4d4d]" />
+                          : <Clock className="w-5 h-5 text-[#fbbf24]" />}
+                      </div>
+
+                      {/* Lead info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 flex-wrap mb-2">
+                          <span className="text-[12px] font-mono font-bold text-[#c8daf0]">{s.firstName} {s.lastName}</span>
+                          <span className="text-[9px] font-mono text-[#3a5070] border border-[#1e2d4a] px-1.5 py-0.5 rounded-sm">{s.industry?.toUpperCase()}</span>
+                          <span className="text-[9px] font-mono text-[#4a6080]">{s.state}</span>
+                          <span className="text-[12px] font-mono font-bold text-[#00d084]">${s.askingPrice}</span>
+                          <span className={`text-[9px] font-mono font-bold ${s.status==="pending"?"text-[#fbbf24]":s.status==="approved"?"text-[#00d084]":"text-[#ff4d4d]"}`}>
+                            {s.status.toUpperCase()}
+                          </span>
+                          <span className="text-[9px] font-mono text-[#2a4060] ml-auto">
+                            #{s.id} · {s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "—"}
+                          </span>
+                        </div>
+                        {/* Details row */}
+                        <div className="flex flex-wrap gap-4 text-[9px] font-mono text-[#4a6080] mb-2">
+                          <span>{s.email}</span>
+                          <span>{s.phoneNumber}</span>
+                          <span>{s.zipCode}</span>
+                          {s.dateOfBirth && <span>DOB: {s.dateOfBirth}</span>}
+                          <div className="flex gap-2">
+                            {s.interestedInMedicare    && <span className="text-[#a78bfa]">Medicare</span>}
+                            {s.interestedInACA         && <span className="text-[#38bdf8]">ACA</span>}
+                            {s.interestedInFinalExpense && <span className="text-[#00d084]">Final Expense</span>}
+                            {s.tcpaConsent             && <span className="text-[#00d084]">TCPA ✓</span>}
+                          </div>
+                        </div>
+                        {s.sellerNotes && (
+                          <p className="text-[10px] font-mono text-[#4a6080] italic mb-2">"{s.sellerNotes}"</p>
+                        )}
+                        {s.adminNotes && (
+                          <p className="text-[9px] font-mono text-[#3a5070]">Admin note: {s.adminNotes}</p>
+                        )}
+                      </div>
+
+                      {/* Review actions — only for pending */}
+                      {s.status === "pending" && (
+                        <div className="flex flex-col gap-2 flex-shrink-0 w-52">
+                          <input
+                            placeholder="Admin note (optional)…"
+                            value={subAdminNotes[s.id] ?? ""}
+                            onChange={e => setSubAdminNotes(p => ({ ...p, [s.id]: e.target.value }))}
+                            className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => reviewMutation.mutate({ id: s.id, status: "approved", adminNotes: subAdminNotes[s.id] ?? "" })}
+                              disabled={reviewMutation.isPending}
+                              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-[#001a0d] border border-[#00d08440] text-[#00d084] text-[9px] font-mono font-bold rounded-sm hover:bg-[#002a15] transition-colors disabled:opacity-40">
+                              <CheckCircle2 className="w-3 h-3" /> APPROVE
+                            </button>
+                            <button
+                              onClick={() => reviewMutation.mutate({ id: s.id, status: "rejected", adminNotes: subAdminNotes[s.id] ?? "" })}
+                              disabled={reviewMutation.isPending}
+                              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-[#1a0000] border border-[#ff4d4d40] text-[#ff4d4d] text-[9px] font-mono font-bold rounded-sm hover:bg-[#2a0000] transition-colors disabled:opacity-40">
+                              <XCircle className="w-3 h-3" /> REJECT
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
       </main>
     </div>
   );

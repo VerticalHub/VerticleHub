@@ -229,6 +229,37 @@ export const marketTrends = pgTable("market_trends", {
   recordedAt: timestamp("recorded_at").defaultNow()
 });
 
+// ── Seller Submissions ─────────────────────────────────────────────────────
+export const leadSubmissions = pgTable("lead_submissions", {
+  id:                    serial("id").primaryKey(),
+  submittedBy:           integer("submitted_by").notNull(),
+  firstName:             text("first_name").notNull(),
+  lastName:              text("last_name").notNull(),
+  email:                 text("email").notNull(),
+  phoneNumber:           text("phone_number").notNull(),
+  zipCode:               text("zip_code").notNull(),
+  state:                 text("state").notNull(),
+  dateOfBirth:           text("date_of_birth"),
+  interestedInACA:       boolean("interested_in_aca").default(false),
+  interestedInMedicare:  boolean("interested_in_medicare").default(false),
+  interestedInFinalExpense: boolean("interested_in_final_expense").default(false),
+  tcpaConsent:           boolean("tcpa_consent").default(false),
+  annualIncome:          integer("annual_income"),
+  householdSize:         integer("household_size"),
+  askingPrice:           decimal("asking_price", { precision: 10, scale: 2 }).notNull(),
+  industry:              text("industry").notNull(),
+  sellerNotes:           text("seller_notes"),
+  status:                text("status").notNull().default("pending"), // pending | approved | rejected
+  adminNotes:            text("admin_notes"),
+  reviewedBy:            integer("reviewed_by"),
+  reviewedAt:            timestamp("reviewed_at"),
+  createdAt:             timestamp("created_at").defaultNow(),
+});
+
+export const insertLeadSubmissionSchema = createInsertSchema(leadSubmissions).omit({ id: true, createdAt: true, reviewedAt: true });
+export type InsertLeadSubmission = z.infer<typeof insertLeadSubmissionSchema>;
+export type LeadSubmission = typeof leadSubmissions.$inferSelect;
+
 // ── Schema exports ─────────────────────────────────────────────────────────────
 export const insertCreditAccountSchema   = createInsertSchema(creditAccounts).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCreditTransactionSchema = createInsertSchema(creditTransactions).omit({ id: true, createdAt: true });

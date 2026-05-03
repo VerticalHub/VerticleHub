@@ -802,6 +802,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Seller Submissions ─────────────────────────────────────────────────────
+  app.post("/api/submissions", async (req, res) => {
+    try {
+      const sub = await storage.createSubmission(req.body);
+      return res.status(201).json({ success: true, data: sub });
+    } catch { return res.status(500).json({ success: false, message: "Failed to create submission" }); }
+  });
+
+  app.get("/api/submissions", async (req, res) => {
+    try {
+      const userId = req.query.userId ? parseInt(req.query.userId as string) : null;
+      const data = userId ? await storage.getSubmissionsByUser(userId) : await storage.getAllSubmissions();
+      return res.json({ success: true, data });
+    } catch { return res.status(500).json({ success: false, message: "Failed to get submissions" }); }
+  });
+
+  app.patch("/api/submissions/:id/review", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status, adminNotes } = req.body;
+      if (!["approved", "rejected"].includes(status))
+        return res.status(400).json({ success: false, message: "Invalid status" });
+      await storage.updateSubmissionStatus(id, status, adminNotes || "", 1);
+
+      if (status === "approved") {
+        const subs = await storage.getAllSubmissions();
+        const sub = subs.find(s => s.id === id);
+        if (sub) {
+          const lead = await storage.createLead({
+            firstName: sub.firstName, lastName: sub.lastName,
+            email: sub.email, phoneNumber: sub.phoneNumber,
+            zipCode: sub.zipCode, state: sub.state,
+            dateOfBirth: sub.dateOfBirth ?? undefined,
+            interestedInACA: sub.interestedInACA ?? false,
+            interestedInMedicare: sub.interestedInMedicare ?? false,
+            interestedInFinalExpense: sub.interestedInFinalExpense ?? false,
+            tcpaConsent: sub.tcpaConsent ?? false,
+            annualIncome: sub.annualIncome ?? undefined,
+            householdSize: sub.householdSize ?? undefined,
+            source: "seller_portal",
+            status: "new",
+          });
+          const score = computeLeadScore(lead as any);
+          await storage.updateLead(lead.id, { leadScore: score.total });
+          await storage.createLeadListing({
+            leadId: lead.id,
+            sellerId: sub.submittedBy,
+            price: sub.askingPrice,
+            industry: sub.industry,
+            geography: lead.state,
+            qualityScore: score.total,
+            isActive: true,
+            featured: false,
+          });
+        }
+      }
+      return res.json({ success: true });
+    } catch { return res.status(500).json({ success: false, message: "Failed to review submission" }); }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

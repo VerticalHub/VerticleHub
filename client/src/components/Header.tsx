@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, BarChart2, Shield, Bell, Keyboard, X, CheckCircle2, AlertTriangle, TrendingUp, Info, LogOut, DollarSign, Zap, LayoutDashboard, Menu } from "lucide-react";
+import { Activity, BarChart2, Shield, Bell, Keyboard, X, CheckCircle2, AlertTriangle, TrendingUp, Info, LogOut, DollarSign, Zap, LayoutDashboard, Menu, Upload } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import CommandPalette from "./CommandPalette";
@@ -157,6 +157,7 @@ export default function Header() {
     { href: "/dashboard",   label: "DASHBOARD",      icon: LayoutDashboard },
     { href: "/leads",       label: "LEADS",          icon: Activity        },
     { href: "/marketplace", label: "MARKETPLACE",    icon: BarChart2       },
+    { href: "/sell",        label: "SELL LEADS",     icon: Upload          },
     { href: "/admin",       label: "COMMAND CENTER", icon: Shield          },
   ];
   const marketOpen = isMarketOpen();

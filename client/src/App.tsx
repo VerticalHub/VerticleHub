@@ -10,6 +10,7 @@ import Marketplace from "@/pages/Marketplace";
 import Admin from "@/pages/Admin";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
+import SellLeads from "@/pages/SellLeads";
 import NotFound from "@/pages/not-found";
 import { Helmet } from "react-helmet";
 
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/home"        component={() => <AuthGuard><Home /></AuthGuard>} />
       <Route path="/thank-you"   component={() => <AuthGuard><ThankYou /></AuthGuard>} />
       <Route path="/marketplace" component={() => <AuthGuard><Marketplace /></AuthGuard>} />
+      <Route path="/sell"        component={() => <AuthGuard><SellLeads /></AuthGuard>} />
       <Route path="/admin"       component={() => <AuthGuard><Admin /></AuthGuard>} />
       <Route component={NotFound} />
     </Switch>
