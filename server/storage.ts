@@ -1,16 +1,17 @@
 import { 
   users, leads, creditAccounts, creditTransactions, creditPackages,
   leadListings, leadPurchases, leadQualityDecay, demandPredictions, marketTrends,
-  alerts, leadActivities,
+  alerts, leadActivities, watchlist, priceAlerts,
   type User, type InsertUser, type Lead, type InsertLead,
   type CreditAccount, type InsertCreditAccount, type CreditTransaction, type InsertCreditTransaction,
   type CreditPackage, type InsertCreditPackage, type LeadListing, type InsertLeadListing,
   type LeadPurchase, type InsertLeadPurchase, type LeadQualityDecay,
   type DemandPrediction, type InsertDemandPrediction, type MarketTrend, type InsertMarketTrend,
   type Alert, type InsertAlert, type LeadActivity, type InsertLeadActivity,
+  type Watchlist, type InsertWatchlist, type PriceAlert, type InsertPriceAlert,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, or, ilike, ne } from "drizzle-orm";
 
 export interface PurchaseDetail {
   purchaseId: number; listingId: number; buyerId: number;
@@ -21,18 +22,37 @@ export interface PurchaseDetail {
   interestedInFinalExpense: boolean | null;
 }
 
+export interface LeadStats {
+  total: number;
+  byStatus: Record<string, number>;
+  byState: Record<string, number>;
+  bySource: Record<string, number>;
+  tcpaCount: number;
+  dncCount: number;
+  acaCount: number;
+  medicareCount: number;
+  finalExpCount: number;
+  avgAgingScore: number;
+  convertedCount: number;
+  today: number;
+}
+
 export interface IStorage {
   // Users / Auth
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
 
   // Leads
   createLead(lead: InsertLead): Promise<Lead>;
   getAllLeads(): Promise<Lead[]>;
   getLeadById(id: number): Promise<Lead | undefined>;
+  updateLead(id: number, updates: Partial<Lead>): Promise<void>;
   updateLeadAgingScore(leadId: number, score: number): Promise<void>;
   markLeadDNC(leadId: number): Promise<void>;
+  searchLeads(query: string, filters?: { state?: string; status?: string; dnc?: boolean; tcpaConsent?: boolean; industry?: string }): Promise<Lead[]>;
+  getLeadStats(): Promise<LeadStats>;
 
   // Credits
   getCreditAccount(userId: number): Promise<CreditAccount | undefined>;
@@ -56,17 +76,31 @@ export interface IStorage {
   updateLeadQuality(leadId: number, newQuality: number): Promise<void>;
   getLeadQuality(leadId: number): Promise<LeadQualityDecay | undefined>;
 
+  // Watchlist
+  addToWatchlist(userId: number, listingId: number): Promise<Watchlist>;
+  removeFromWatchlist(userId: number, listingId: number): Promise<void>;
+  getWatchlist(userId: number): Promise<Watchlist[]>;
+  isWatchlisted(userId: number, listingId: number): Promise<boolean>;
+
+  // Price Alerts
+  createPriceAlert(alert: InsertPriceAlert): Promise<PriceAlert>;
+  getPriceAlerts(userId: number): Promise<PriceAlert[]>;
+  deletePriceAlert(id: number): Promise<void>;
+  triggerPriceAlert(id: number): Promise<void>;
+
   // Alerts
   createAlert(alert: InsertAlert): Promise<Alert>;
   getUnreadAlerts(userId: number): Promise<Alert[]>;
   getAllAlerts(userId: number): Promise<Alert[]>;
   markAlertRead(alertId: number): Promise<void>;
   markAllAlertsRead(userId: number): Promise<void>;
+  deleteAlert(alertId: number): Promise<void>;
 
   // CRM Activities
   createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity>;
   getLeadActivities(leadId: number): Promise<LeadActivity[]>;
   getFollowUps(userId: number): Promise<LeadActivity[]>;
+  getAllRecentActivities(userId: number, limit?: number): Promise<LeadActivity[]>;
 
   // AI / Market
   saveDemandPrediction(prediction: InsertDemandPrediction): Promise<DemandPrediction>;
@@ -90,10 +124,27 @@ export class DatabaseStorage implements IStorage {
     const [u] = await db.insert(users).values(insertUser).returning();
     return u;
   }
+  async getAllUsers() {
+    return db.select({ id: users.id, username: users.username, email: users.email, role: users.role, createdAt: users.createdAt, password: users.password }).from(users).orderBy(desc(users.createdAt));
+  }
 
   // ── Leads ──────────────────────────────────────────────────────────────────
   async createLead(insertLead: InsertLead): Promise<Lead> {
-    const [lead] = await db.insert(leads).values({ ...insertLead, createdAt: new Date() }).returning();
+    // Compute a lead score based on available data
+    let score = 50;
+    if ((insertLead as any).tcpaConsent) score += 20;
+    if ((insertLead as any).interestedInMedicare) score += 15;
+    if ((insertLead as any).interestedInACA) score += 10;
+    if ((insertLead as any).dateOfBirth) score += 5;
+    score = Math.min(100, score);
+
+    const [lead] = await db.insert(leads).values({ 
+      ...insertLead, 
+      createdAt: new Date(),
+      leadScore: score,
+      status: "new",
+      source: (insertLead as any).source || "web_form",
+    }).returning();
     await db.insert(leadQualityDecay).values({
       leadId: lead.id, initialQuality: 100, currentQuality: 100, decayRate: "5.00",
     });
@@ -106,11 +157,80 @@ export class DatabaseStorage implements IStorage {
     const [l] = await db.select().from(leads).where(eq(leads.id, id));
     return l ?? undefined;
   }
+  async updateLead(id: number, updates: Partial<Lead>) {
+    await db.update(leads).set(updates).where(eq(leads.id, id));
+  }
   async updateLeadAgingScore(leadId: number, score: number) {
     await db.update(leads).set({ agingScore: score }).where(eq(leads.id, leadId));
   }
   async markLeadDNC(leadId: number) {
-    await db.update(leads).set({ dnc: true, dncAddedAt: new Date() }).where(eq(leads.id, leadId));
+    await db.update(leads).set({ dnc: true, dncAddedAt: new Date(), status: "archived" }).where(eq(leads.id, leadId));
+  }
+  async searchLeads(query: string, filters?: { state?: string; status?: string; dnc?: boolean; tcpaConsent?: boolean; industry?: string }) {
+    const conditions: any[] = [];
+    if (query && query.trim()) {
+      conditions.push(or(
+        ilike(leads.firstName, `%${query}%`),
+        ilike(leads.lastName, `%${query}%`),
+        ilike(leads.email, `%${query}%`),
+        ilike(leads.phoneNumber, `%${query}%`),
+        ilike(leads.state, `%${query}%`),
+        ilike(leads.zipCode, `%${query}%`),
+      ));
+    }
+    if (filters?.state) conditions.push(eq(leads.state, filters.state));
+    if (filters?.status) conditions.push(eq(leads.status, filters.status));
+    if (filters?.dnc !== undefined) conditions.push(eq(leads.dnc, filters.dnc));
+    if (filters?.tcpaConsent !== undefined) conditions.push(eq(leads.tcpaConsent, filters.tcpaConsent));
+    if (filters?.industry === "aca") conditions.push(eq(leads.interestedInACA, true));
+    if (filters?.industry === "medicare") conditions.push(eq(leads.interestedInMedicare, true));
+    if (filters?.industry === "final_expense") conditions.push(eq(leads.interestedInFinalExpense, true));
+
+    const q = conditions.length
+      ? db.select().from(leads).where(and(...conditions))
+      : db.select().from(leads);
+    return q.orderBy(desc(leads.createdAt)).limit(200);
+  }
+  async getLeadStats(): Promise<LeadStats> {
+    const all = await db.select().from(leads);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const byStatus: Record<string, number> = { new: 0, contacted: 0, qualified: 0, converted: 0, archived: 0 };
+    const byState: Record<string, number> = {};
+    const bySource: Record<string, number> = {};
+    let tcpaCount = 0, dncCount = 0, acaCount = 0, medicareCount = 0, finalExpCount = 0, todayCount = 0;
+    let totalAging = 0;
+
+    for (const l of all) {
+      const status = l.status || "new";
+      byStatus[status] = (byStatus[status] || 0) + 1;
+      byState[l.state] = (byState[l.state] || 0) + 1;
+      const src = l.source || "web_form";
+      bySource[src] = (bySource[src] || 0) + 1;
+      if (l.tcpaConsent) tcpaCount++;
+      if (l.dnc) dncCount++;
+      if (l.interestedInACA) acaCount++;
+      if (l.interestedInMedicare) medicareCount++;
+      if (l.interestedInFinalExpense) finalExpCount++;
+      if (l.createdAt && new Date(l.createdAt) >= today) todayCount++;
+      totalAging += l.agingScore ?? 100;
+    }
+
+    return {
+      total: all.length,
+      byStatus,
+      byState,
+      bySource,
+      tcpaCount,
+      dncCount,
+      acaCount,
+      medicareCount,
+      finalExpCount,
+      avgAgingScore: all.length ? Math.round(totalAging / all.length) : 100,
+      convertedCount: byStatus.converted || 0,
+      today: todayCount,
+    };
   }
 
   // ── Credits ────────────────────────────────────────────────────────────────
@@ -218,6 +338,37 @@ export class DatabaseStorage implements IStorage {
     return q ?? undefined;
   }
 
+  // ── Watchlist ──────────────────────────────────────────────────────────────
+  async addToWatchlist(userId: number, listingId: number): Promise<Watchlist> {
+    const [w] = await db.insert(watchlist).values({ userId, listingId }).returning();
+    return w;
+  }
+  async removeFromWatchlist(userId: number, listingId: number): Promise<void> {
+    await db.delete(watchlist).where(and(eq(watchlist.userId, userId), eq(watchlist.listingId, listingId)));
+  }
+  async getWatchlist(userId: number): Promise<Watchlist[]> {
+    return db.select().from(watchlist).where(eq(watchlist.userId, userId)).orderBy(desc(watchlist.createdAt));
+  }
+  async isWatchlisted(userId: number, listingId: number): Promise<boolean> {
+    const [w] = await db.select().from(watchlist).where(and(eq(watchlist.userId, userId), eq(watchlist.listingId, listingId))).limit(1);
+    return !!w;
+  }
+
+  // ── Price Alerts ───────────────────────────────────────────────────────────
+  async createPriceAlert(alert: InsertPriceAlert): Promise<PriceAlert> {
+    const [a] = await db.insert(priceAlerts).values(alert).returning();
+    return a;
+  }
+  async getPriceAlerts(userId: number): Promise<PriceAlert[]> {
+    return db.select().from(priceAlerts).where(eq(priceAlerts.userId, userId)).orderBy(desc(priceAlerts.createdAt));
+  }
+  async deletePriceAlert(id: number): Promise<void> {
+    await db.delete(priceAlerts).where(eq(priceAlerts.id, id));
+  }
+  async triggerPriceAlert(id: number): Promise<void> {
+    await db.update(priceAlerts).set({ triggered: true }).where(eq(priceAlerts.id, id));
+  }
+
   // ── Alerts ─────────────────────────────────────────────────────────────────
   async createAlert(alert: InsertAlert): Promise<Alert> {
     const [a] = await db.insert(alerts).values(alert).returning();
@@ -240,6 +391,9 @@ export class DatabaseStorage implements IStorage {
   async markAllAlertsRead(userId: number) {
     await db.update(alerts).set({ read: true }).where(eq(alerts.userId, userId));
   }
+  async deleteAlert(alertId: number) {
+    await db.delete(alerts).where(eq(alerts.id, alertId));
+  }
 
   // ── CRM Activities ─────────────────────────────────────────────────────────
   async createLeadActivity(activity: InsertLeadActivity): Promise<LeadActivity> {
@@ -256,6 +410,12 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(leadActivities.userId, userId), eq(leadActivities.disposition, "callback")))
       .orderBy(desc(leadActivities.createdAt))
       .limit(20);
+  }
+  async getAllRecentActivities(userId: number, limit = 20): Promise<LeadActivity[]> {
+    return db.select().from(leadActivities)
+      .where(eq(leadActivities.userId, userId))
+      .orderBy(desc(leadActivities.createdAt))
+      .limit(limit);
   }
 
   // ── AI / Market ────────────────────────────────────────────────────────────

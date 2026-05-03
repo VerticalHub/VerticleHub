@@ -4,46 +4,118 @@ Healthcare lead generation, resale marketplace, and AI demand intelligence platf
 
 ## Architecture
 
-- **Frontend**: React + Vite, TanStack Query, Wouter routing, Tailwind CSS + shadcn/ui
+- **Frontend**: React + Vite, TanStack Query, Wouter routing, Tailwind CSS + shadcn/ui, Recharts
 - **Backend**: Express.js + TypeScript, Drizzle ORM, PostgreSQL
 - **Auth**: express-session + bcryptjs, sessions stored in PostgreSQL via connect-pg-simple
 - **Scheduling**: node-cron (lead aging decay every 15 min)
+- **Font**: JetBrains Mono (Google Fonts)
 
-## Key Features
+## Color Palette (Dark Terminal UI)
 
-1. **Session-based authentication** — Login/register pages, auth guard on all routes, logout in header user chip
-2. **TCPA compliance flags** — `tcpaConsent`, `tcpaConsentSource`, visible in Admin Lead DB and Leads analytics table
-3. **Purchase deduplication** — Checks owned lead IDs before opening buy modal; server-side blocks re-purchase with 409
-4. **Lead aging/decay** — `agingScore` computed every 15 min via cron (2% decay/hr, floor 30); age indicator column in Lead DB (green/amber/red by hours old)
-5. **Alerts system** — `alerts` table; auto-generated on purchase, new lead capture, low balance, DNC; live bell in header polling every 30s; mark read / mark all read
-6. **CSV export** — GET `/api/export/leads` and `/api/export/listings` download full datasets
-7. **CRM activity layer** — `leadActivities` table; inline activity feed in expandable Admin rows with log form (call/email/note + disposition)
-
-## Database Tables
-
-- `leads` — with tcpaConsent, tcpaConsentDate, tcpaConsentSource, dnc, dncAddedAt, agingScore
-- `users` — with email, role (admin/agent)
-- `alerts` — userId, type, title, body, leadId, read
-- `leadActivities` — leadId, userId, type, disposition, notes, duration, followUpAt
-- `leadListings`, `leadPurchases`, `creditAccounts`, `creditTransactions`, `creditPackages`, `demandPredictions`, `marketTrends`
+- bg: `#070d1a`, card: `#0d1526`, border: `#1e2d4a`, text: `#c8daf0`
+- green: `#00d084`, red: `#ff4d4d`, blue: `#38bdf8`, amber: `#fbbf24`, purple: `#a78bfa`
 
 ## Demo Credentials
 
-- Username: `admin` / Password: `admin123`
+- Admin: `admin` / `admin123`
+- Agent: `agent1` / `agent123`
 
-## Dark Palette
+## Pages & Routes
 
-- Background: `#070d1a` | Card: `#0d1526` | Border: `#1e2d4a`
-- Text: `#c8daf0` | Green: `#00d084` | Red: `#ff4d4d`
-- Blue: `#38bdf8` | Amber: `#fbbf24` | Purple: `#a78bfa`
+| Route | Page | Description |
+|---|---|---|
+| `/login` | Login | Sign in / register |
+| `/dashboard` | Dashboard | Post-login landing — KPI overview, pipeline charts, alerts, quick actions |
+| `/leads` | Leads | Pipeline funnel, analytics, CRM activity log, lead capture link |
+| `/home` | Home | TCPA-compliant lead intake form |
+| `/marketplace` | Marketplace | Order book, watchlist, portfolio, AI signals |
+| `/admin` | Admin | Command center — overview, lead DB, listings, market data, users |
+| `/thank-you` | ThankYou | Post-submission confirmation |
 
-## API Routes
+## Key Features
 
-- **Auth**: `POST /api/auth/login|register|logout`, `GET /api/auth/me`
-- **Leads**: `GET|POST /api/leads`, `GET /api/leads/:id`, `POST /api/leads/:id/dnc`, `GET /api/leads/:leadId/owned`
-- **Activities**: `GET|POST /api/leads/:id/activities`, `GET /api/follow-ups`
-- **Alerts**: `GET /api/alerts`, `GET /api/alerts/unread`, `PATCH /api/alerts/:id/read`, `PATCH /api/alerts/read-all`
-- **Marketplace**: `GET /api/lead-listings`, `POST /api/lead-listings/:id/purchase`
-- **Credits**: `GET /api/credits/:userId`, `POST /api/credits/purchase`, `GET /api/credit-packages`
-- **Export**: `GET /api/export/leads`, `GET /api/export/listings`
-- **AI**: `GET /api/demand-predictions`, `GET /api/market-trends`
+1. **Dashboard** — Comprehensive post-login overview: 6 KPI cards, status distribution bar chart, source pie chart, recent captures feed, market signals, alert panel, quick action buttons
+2. **Session-based authentication** — Login/register, auth guard on all routes, role badge (admin=red, agent=green, viewer=amber) in header user chip
+3. **Header** — Live ticker tape (12 markets, animated), bell notifications (real-time polling), mobile hamburger nav, DASHBOARD/LEADS/MARKETPLACE/COMMAND CENTER links, Cmd+K shortcut
+4. **Command Palette** — Cmd+K opens searchable palette with nav items, quick actions, and dynamic lead search (type 2+ chars)
+5. **Lead DB** — Full-text search, state/status/TCPA/DNC filters, inline status edit (click badge), row expansion with full profile, bulk select + bulk DNC, CSV export
+6. **Marketplace Order Book** — Watchlist heart toggle, value score column (quality÷price×10), BEST VALUE/FEATURED/PRIME badges, sort by featured/quality/value/price, buy flow with credit check
+7. **Watchlist Tab** — Saved listings with full details, remove buttons, price alerts creation form, active alerts list
+8. **Portfolio Tab** — Purchase history, credit packages for top-up, spend/balance stats
+9. **AI Signals Tab** — Demand prediction grid, market health radar chart, value score distribution chart
+10. **TCPA compliance flags** — `tcpaConsent`, `tcpaConsentSource` tracked per lead
+11. **Purchase deduplication** — Server-side 409 on re-purchase, UI shows "OWNED" state
+12. **Lead aging/decay** — `agingScore` computed every 15 min via cron (2% decay/hr, floor 30)
+13. **Alerts system** — Auto-generated on purchase, conversion, new prime lead, low balance, DNC; bell polls every 30s; mark read / mark all read
+14. **CSV export** — `/api/export/leads` and `/api/export/listings` with optional filters
+15. **CRM layer** — Activities table (call/email/note), disposition tracking, follow-up scheduling
+16. **AI Demand Predictions** — Predict + generate endpoints, confidence scores, factor breakdown
+17. **Market Trends** — Time-series volume + avgPrice data with LineChart visualization
+18. **User Management** — Admin tab shows all users with role colors
+
+## API Endpoints
+
+### Auth
+- `POST /api/auth/login` — Login
+- `POST /api/auth/register` — Register  
+- `GET /api/auth/me` — Current session
+- `POST /api/auth/logout` — Logout
+
+### Leads (order matters — stats/search BEFORE /:id)
+- `GET /api/leads/stats` — Aggregate stats (byStatus, byState, bySource, counts)
+- `GET /api/leads/search?q=&state=&status=&tcpa=&dnc=` — Full-text search
+- `POST /api/leads` — Capture new lead (TCPA validated)
+- `GET /api/leads` — All leads
+- `GET /api/leads/:id` — Single lead
+- `PATCH /api/leads/:id` — Update status/notes/tags
+- `POST /api/leads/:id/dnc` — Mark DNC
+- `POST /api/leads/bulk-dnc` — Bulk DNC `{ leadIds: number[] }`
+
+### Marketplace
+- `GET /api/lead-listings` — Active listings (with filters)
+- `GET /api/lead-listings/all` — All listings
+- `POST /api/lead-listings` — Create listing
+- `POST /api/lead-listings/:id/purchase` — Buy lead
+
+### Watchlist & Alerts
+- `GET/POST /api/watchlist` — Get / toggle watchlist
+- `DELETE /api/watchlist/:listingId` — Remove
+- `GET/POST /api/price-alerts` — Get / create price alerts
+- `DELETE /api/price-alerts/:id` — Delete alert
+
+### Dashboard
+- `GET /api/dashboard?userId=1` — Aggregated summary
+
+### Credits
+- `GET /api/credits/:userId` — Account balance
+- `GET /api/credit-packages` — Available packages
+- `POST /api/credits/purchase` — Deposit
+
+### Intelligence
+- `GET /api/demand-predictions` — AI demand forecasts
+- `POST /api/demand-predictions/generate` — Generate new prediction
+- `GET /api/market-trends` — Market trend time series
+
+### Export
+- `GET /api/export/leads?state=&status=` — CSV export
+- `GET /api/export/listings` — Listings CSV
+
+## Database Schema (shared/schema.ts)
+
+Tables: `users`, `leads`, `leadListings`, `leadPurchases`, `creditAccounts`, `creditTransactions`, `creditPackages`, `alerts`, `leadActivities`, `demandPredictions`, `marketTrends`, `watchlist`, `priceAlerts`
+
+Key lead fields: `status`, `source`, `tcpaConsent`, `tcpaConsentSource`, `dnc`, `agingScore`, `leadScore`, `notes`, `tags`, `annualIncome`, `householdSize`
+
+## CSS Classes (index.css)
+
+- `.badge-{status}` — Status badges (new/contacted/qualified/converted/archived)
+- `.badge-best-value` — Green gradient "BEST VALUE" badge
+- `.badge-featured` — Purple "FEATURED" badge
+- `.glow-{green|blue|red|amber|purple}` — Static box-shadow glow
+- `.pulse-{green|blue|red|amber}` — Animated pulsing glow
+- `.shimmer` — Loading skeleton animation
+- `.pipeline-bar` — Animated width bar for funnel visualization
+- `.ticker-track` — Auto-scrolling ticker animation
+- `.fade-in` — Entrance animation
+- `.slide-down` — Collapsible row animation
+- `.num` — Tabular number alignment

@@ -9,6 +9,7 @@ import ThankYou from "@/pages/ThankYou";
 import Marketplace from "@/pages/Marketplace";
 import Admin from "@/pages/Admin";
 import Login from "@/pages/Login";
+import Dashboard from "@/pages/Dashboard";
 import NotFound from "@/pages/not-found";
 import { Helmet } from "react-helmet";
 
@@ -29,18 +30,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!data?.success && location !== "/login") {
-    return <Redirect to="/login" />;
-  }
-
+  if (!data?.success && location !== "/login") return <Redirect to="/login" />;
   return <>{children}</>;
 }
 
 function Router() {
   return (
     <Switch>
-      <Route path="/login" component={Login} />
-      <Route path="/" component={() => <Redirect to="/leads" />} />
+      <Route path="/login"       component={Login} />
+      <Route path="/"            component={() => <Redirect to="/dashboard" />} />
+      <Route path="/dashboard"   component={() => <AuthGuard><Dashboard /></AuthGuard>} />
       <Route path="/leads"       component={() => <AuthGuard><Leads /></AuthGuard>} />
       <Route path="/home"        component={() => <AuthGuard><Home /></AuthGuard>} />
       <Route path="/thank-you"   component={() => <AuthGuard><ThankYou /></AuthGuard>} />

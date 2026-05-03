@@ -1,892 +1,699 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Search, Download, Shield, BarChart2, Plus, Activity,
+  ChevronDown, ChevronRight, CheckSquare, Square, Users, TrendingUp,
+  PhoneOff, RefreshCw, Edit3,
+} from "lucide-react";
+import Header from "@/components/Header";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import Header from "@/components/Header";
-import { Helmet } from "react-helmet";
-import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line, ComposedChart,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from "recharts";
-import {
-  Users, TrendingUp, DollarSign, Package, Plus, ChevronUp, ChevronDown,
-  Activity, Target, Shield, Zap, RefreshCw, ArrowUpRight, ArrowDownRight,
-  Eye, Radio, AlertCircle, BarChart2, Database, Download, Phone, Mail,
-  FileText, Clock, CheckCircle2, PhoneCall, ShieldAlert, ShieldCheck
-} from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from "recharts";
 
-interface Lead {
-  id: number; firstName: string; lastName: string; email: string;
-  phoneNumber: string; zipCode: string; state: string;
-  dateOfBirth?: string; hasMedicaidMedicareVA?: boolean;
-  interestedInACA: boolean; interestedInMedicare: boolean; interestedInFinalExpense: boolean;
-  tcpaConsent?: boolean; tcpaConsentSource?: string; dnc?: boolean; agingScore?: number;
-  createdAt: string;
-}
-interface LeadActivity {
-  id: number; leadId: number; userId: number; type: string;
-  disposition?: string; notes?: string; duration?: number; createdAt: string;
-}
-interface LeadListing {
-  id: number; leadId: number; price: string; qualityScore: number;
-  timesResold: number; industry: string; geography: string; isActive: boolean; createdAt: string;
-}
+type Tab = "overview" | "leads" | "listings" | "new" | "market" | "users";
 
-const sparkData = [
-  [3, 7, 5, 9, 6, 11, 8],
-  [8, 6, 10, 7, 12, 9, 14],
-  [22, 24, 21, 26, 28, 25, 31],
-  [4, 3, 5, 4, 6, 5, 7],
-];
-
-const volumeHistory = [
-  { date: "Apr 26", leads: 18, revenue: 612, listings: 14 },
-  { date: "Apr 27", leads: 24, revenue: 816, listings: 19 },
-  { date: "Apr 28", leads: 21, revenue: 714, listings: 17 },
-  { date: "Apr 29", leads: 31, revenue: 1054, listings: 26 },
-  { date: "Apr 30", leads: 27, revenue: 918, listings: 22 },
-  { date: "May 01", leads: 35, revenue: 1190, listings: 29 },
-  { date: "May 02", leads: 42, revenue: 1428, listings: 35 },
-];
-
-const industryBreakdown = [
-  { name: "Healthcare", volume: 142, avgPrice: 28.4, quality: 87 },
-  { name: "Medicare", volume: 98, avgPrice: 42.1, quality: 91 },
-  { name: "Insurance", volume: 76, avgPrice: 22.6, quality: 79 },
-  { name: "Final Exp", volume: 54, avgPrice: 31.8, quality: 83 },
-];
-
-// ── Activity Feed (inline CRM panel) ──────────────────────────────────────────
-function ActivityFeed({ leadId }: { leadId: number }) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [form, setForm] = useState({ type: "call", disposition: "contacted", notes: "", duration: "" });
-
-  const { data: actResp, isLoading } = useQuery<any>({
-    queryKey: ["/api/leads", leadId, "activities"],
-    queryFn: () => fetch(`/api/leads/${leadId}/activities`).then(r => r.json()),
-  });
-  const activities: LeadActivity[] = actResp?.data || [];
-
-  const logMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", `/api/leads/${leadId}/activities`, { ...data, userId: 1, leadId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId, "activities"] });
-      setForm({ type: "call", disposition: "contacted", notes: "", duration: "" });
-      toast({ title: "ACTIVITY LOGGED" });
-    },
-  });
-
-  const actIcon = (type: string) => {
-    if (type === "call")  return <PhoneCall className="w-3 h-3 text-[#38bdf8]" />;
-    if (type === "email") return <Mail       className="w-3 h-3 text-[#a78bfa]" />;
-    if (type === "note")  return <FileText   className="w-3 h-3 text-[#fbbf24]" />;
-    return <CheckCircle2 className="w-3 h-3 text-[#00d084]" />;
-  };
-  const dispColor = (d?: string) => ({ converted: "#00d084", contacted: "#38bdf8", callback: "#fbbf24", not_interested: "#ff4d4d", voicemail: "#4a6080" }[d ?? ""] ?? "#4a6080");
-
-  return (
-    <div className="border-t border-[#1e2d4a] pt-3">
-      <p className="text-[9px] font-mono tracking-widest text-[#2a4060] mb-2">CRM ACTIVITY LOG</p>
-      {/* Timeline */}
-      {isLoading ? (
-        <div className="text-[9px] font-mono text-[#2a4060] mb-2">Loading...</div>
-      ) : activities.length === 0 ? (
-        <div className="text-[9px] font-mono text-[#1e2d4a] mb-2">No activities logged yet.</div>
-      ) : (
-        <div className="space-y-1.5 mb-3 max-h-28 overflow-y-auto">
-          {activities.map(a => (
-            <div key={a.id} className="flex items-start gap-2 text-[10px] font-mono">
-              <div className="mt-0.5 flex-shrink-0">{actIcon(a.type)}</div>
-              <div className="flex-1 min-w-0">
-                <span className="uppercase" style={{ color: dispColor(a.disposition) }}>{a.disposition || a.type}</span>
-                {a.notes && <span className="text-[#4a6080] ml-2">— {a.notes}</span>}
-              </div>
-              <span className="text-[#1e2d4a] flex-shrink-0 text-[9px]">{new Date(a.createdAt).toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {/* Log form */}
-      <div className="flex flex-wrap gap-2 items-end">
-        <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
-          className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1 rounded-sm focus:outline-none focus:border-[#2563eb]">
-          {["call","email","note","disposition"].map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
-        </select>
-        <select value={form.disposition} onChange={e => setForm(p => ({ ...p, disposition: e.target.value }))}
-          className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1 rounded-sm focus:outline-none focus:border-[#2563eb]">
-          {["contacted","voicemail","not_interested","converted","callback"].map(d => <option key={d} value={d}>{d.replace("_"," ").toUpperCase()}</option>)}
-        </select>
-        <input type="text" placeholder="Notes..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-          className="flex-1 min-w-32 bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#1e2d4a]" />
-        <button onClick={() => logMutation.mutate(form)} disabled={logMutation.isPending}
-          className="btn-terminal text-[10px] flex items-center gap-1">
-          <Plus className="w-3 h-3" /> LOG
-        </button>
-      </div>
-    </div>
-  );
-}
-
-const MiniSparkline = ({ data, color }: { data: number[]; color: string }) => (
-  <div className="h-8 w-20">
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data.map((v, i) => ({ v }))}>
-        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} />
-      </LineChart>
-    </ResponsiveContainer>
-  </div>
-);
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-2 text-[11px] font-mono">
-        <p className="text-[#4a6080] mb-1">{label}</p>
-        {payload.map((p: any, i: number) => (
-          <p key={i} style={{ color: p.color }}>{p.name}: {p.value}</p>
-        ))}
-      </div>
-    );
-  }
-  return null;
+const STATUS_OPTS = ["new", "contacted", "qualified", "converted", "archived"];
+const STATUS_COLORS: Record<string, string> = {
+  new: "#38bdf8", contacted: "#fbbf24", qualified: "#a78bfa", converted: "#00d084", archived: "#4a6080",
 };
+const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
+
+function StatusBadge({ status }: { status?: string | null }) {
+  const s = status || "new";
+  return <span className={`badge-${s}`}>{s.toUpperCase()}</span>;
+}
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<"overview" | "leads" | "listings" | "create" | "trends">("overview");
-  const [newListing, setNewListing] = useState({ leadId: "", price: "", industry: "", geography: "" });
-  const [sortField, setSortField] = useState("createdAt");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [expandedLeadId, setExpandedLeadId] = useState<number | null>(null);
-  const [trendIndustry, setTrendIndustry] = useState("healthcare");
-  const [trendGeo, setTrendGeo] = useState("CA");
+  const [tab, setTab] = useState<Tab>("overview");
+  const [search, setSearch] = useState("");
+  const [filterState, setFilterState] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterTcpa, setFilterTcpa] = useState("");
+  const [filterDnc, setFilterDnc] = useState("false");
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [editStatus, setEditStatus] = useState<Record<number, string>>({});
+  const [newListing, setNewListing] = useState({ leadId: "", price: "", industry: "healthcare", geography: "" });
+  const [genPred, setGenPred] = useState({ industry: "healthcare", geography: "CA" });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: leadsResp, isLoading: loadingLeads } = useQuery<any>({
-    queryKey: ["/api/leads"],
-    refetchInterval: 60000,
+  // ── Queries ────────────────────────────────────────────────────────────────
+  const { data: statsResp } = useQuery<any>({
+    queryKey: ["/api/leads/stats"],
+    queryFn: () => fetch("/api/leads/stats").then(r => r.json()),
+    refetchInterval: 30_000,
   });
-  const leads: Lead[] = leadsResp?.data || [];
+  const stats = statsResp?.data;
 
-  const { data: listingsResp, isLoading: loadingListings } = useQuery<any>({
+  const searchParams = new URLSearchParams({ q: search, state: filterState, status: filterStatus, dnc: filterDnc });
+  if (filterTcpa) searchParams.set("tcpa", filterTcpa);
+  const { data: leadsResp, isLoading: leadsLoading } = useQuery<any>({
+    queryKey: ["/api/leads/search", search, filterState, filterStatus, filterTcpa, filterDnc],
+    queryFn: () => fetch(`/api/leads/search?${searchParams}`).then(r => r.json()),
+    staleTime: 10_000,
+  });
+  const leads: any[] = leadsResp?.data || [];
+
+  const { data: listingsResp } = useQuery<any>({
     queryKey: ["/api/lead-listings/all"],
     queryFn: () => fetch("/api/lead-listings/all").then(r => r.json()),
-    refetchInterval: 30000,
   });
-  const listings: LeadListing[] = listingsResp?.data || [];
+  const listings: any[] = listingsResp?.data || [];
 
   const { data: trendsResp } = useQuery<any>({
     queryKey: ["/api/market-trends"],
+    queryFn: () => fetch("/api/market-trends").then(r => r.json()),
+    enabled: tab === "market",
   });
   const trends: any[] = trendsResp?.data || [];
 
+  const { data: predsResp } = useQuery<any>({
+    queryKey: ["/api/demand-predictions"],
+    queryFn: () => fetch("/api/demand-predictions").then(r => r.json()),
+    enabled: tab === "market",
+  });
+  const predictions: any[] = predsResp?.data || [];
+
+  const { data: usersResp } = useQuery<any>({
+    queryKey: ["/api/users"],
+    queryFn: () => fetch("/api/users").then(r => r.json()),
+    enabled: tab === "users",
+  });
+  const allUsers: any[] = usersResp?.data || [];
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiRequest("PATCH", `/api/leads/${id}`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads/search"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads/stats"] });
+      toast({ title: "Status updated" });
+    },
+  });
+
+  const dncMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/leads/${id}/dnc`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads/search"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads/stats"] });
+      toast({ title: "DNC marked", description: "Lead added to Do Not Call list." });
+    },
+  });
+
+  const bulkDncMutation = useMutation({
+    mutationFn: (leadIds: number[]) => apiRequest("POST", "/api/leads/bulk-dnc", { leadIds }),
+    onSuccess: (_, ids) => {
+      setSelected(new Set());
+      queryClient.invalidateQueries({ queryKey: ["/api/leads/search"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads/stats"] });
+      toast({ title: "Bulk DNC applied", description: `${ids.length} leads marked as DNC.` });
+    },
+  });
+
   const createListingMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/lead-listings", { ...data, sellerId: 1, qualityScore: 100, timesResold: 0, isActive: true }),
+    mutationFn: (data: any) => apiRequest("POST", "/api/lead-listings", data),
     onSuccess: () => {
-      toast({ title: "LISTING CREATED", description: "Lead queued to marketplace." });
-      queryClient.invalidateQueries({ queryKey: ["/api/lead-listings"] });
-      setNewListing({ leadId: "", price: "", industry: "", geography: "" });
-    },
-    onError: (e: any) => toast({ title: "ERROR", description: e.message, variant: "destructive" }),
-  });
-
-  const recordTrendMutation = useMutation({
-    mutationFn: ({ industry, geography }: { industry: string; geography: string }) =>
-      apiRequest("POST", "/api/market-trends", {
-        industry, geography,
-        avgPrice: (20 + Math.random() * 40).toFixed(2),
-        volume: Math.floor(Math.random() * 100) + 50,
-        growthRate: (Math.random() * 20 - 10).toFixed(2),
-      }),
-    onSuccess: () => {
-      toast({ title: "TREND RECORDED", description: "Market data point saved." });
-      queryClient.invalidateQueries({ queryKey: ["/api/market-trends"] });
+      setNewListing({ leadId: "", price: "", industry: "healthcare", geography: "" });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-listings/all"] });
+      toast({ title: "Listing created", description: "Lead is now live on the marketplace." });
     },
   });
 
-  const handleCreateListing = () => {
-    if (!newListing.leadId || !newListing.price || !newListing.industry || !newListing.geography) {
-      toast({ title: "VALIDATION ERROR", description: "All fields required.", variant: "destructive" });
-      return;
+  const generatePredMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/demand-predictions/generate", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/demand-predictions"] });
+      toast({ title: "AI prediction generated" });
+    },
+  });
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const toggleAll = () => {
+    if (selected.size === leads.length) setSelected(new Set());
+    else setSelected(new Set(leads.map((l: any) => l.id)));
+  };
+  const toggleOne = (id: number) => {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelected(next);
+  };
+  const handleStatusSave = (id: number) => {
+    if (editStatus[id] !== undefined) {
+      updateStatusMutation.mutate({ id, status: editStatus[id] });
+      setEditStatus(prev => { const n = { ...prev }; delete n[id]; return n; });
     }
-    createListingMutation.mutate({ leadId: parseInt(newListing.leadId), price: newListing.price, industry: newListing.industry, geography: newListing.geography });
+  };
+  const handleExport = () => {
+    const params = new URLSearchParams();
+    if (filterState)  params.set("state", filterState);
+    if (filterStatus) params.set("status", filterStatus);
+    window.open(`/api/export/leads?${params}`, "_blank");
   };
 
-  const getInterests = (lead: Lead) => {
-    const i = [];
-    if (lead.interestedInACA) i.push({ label: "ACA", color: "#38bdf8" });
-    if (lead.interestedInMedicare) i.push({ label: "Medicare", color: "#a78bfa" });
-    if (lead.interestedInFinalExpense) i.push({ label: "Final Exp", color: "#00d084" });
-    return i;
-  };
-
-  const activeListings = listings.filter(l => l.isActive);
-  const avgPrice = listings.length ? (listings.reduce((s, l) => s + parseFloat(l.price), 0) / listings.length).toFixed(2) : "0.00";
-  const avgQuality = listings.length ? Math.round(listings.reduce((s, l) => s + l.qualityScore, 0) / listings.length) : 0;
-  const totalRevenue = listings.reduce((s, l) => s + parseFloat(l.price) * l.timesResold, 0).toFixed(2);
-
-  const kpis = [
-    { label: "TOTAL LEADS", value: leads.length, sub: "+12% WoW", up: true, color: "#38bdf8", spark: sparkData[0], icon: Users },
-    { label: "ACTIVE LISTINGS", value: activeListings.length, sub: "+8% WoW", up: true, color: "#00d084", spark: sparkData[1], icon: Package },
-    { label: "TOTAL REVENUE", value: `$${totalRevenue}`, sub: "+22% WoW", up: true, color: "#fbbf24", spark: sparkData[2], icon: DollarSign },
-    { label: "AVG QUALITY", value: `${avgQuality}%`, sub: "-1% WoW", up: false, color: "#fb923c", spark: sparkData[3], icon: Target },
+  const tabs: { id: Tab; label: string; icon: any }[] = [
+    { id: "overview", label: "OVERVIEW",     icon: BarChart2  },
+    { id: "leads",    label: "LEAD DB",      icon: Activity   },
+    { id: "listings", label: "LISTINGS",     icon: Shield     },
+    { id: "new",      label: "NEW LISTING",  icon: Plus       },
+    { id: "market",   label: "MARKET DATA",  icon: TrendingUp },
+    { id: "users",    label: "USERS",        icon: Users      },
   ];
 
-  const tabs = [
-    { id: "overview", label: "OVERVIEW", icon: BarChart2 },
-    { id: "leads", label: "LEAD DB", icon: Database },
-    { id: "listings", label: "LISTINGS", icon: Package },
-    { id: "create", label: "NEW LISTING", icon: Plus },
-    { id: "trends", label: "MARKET DATA", icon: TrendingUp },
-  ] as const;
-
-  const handleSort = (f: string) => {
-    if (sortField === f) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortField(f); setSortDir("desc"); }
-  };
-
-  const qColor = (s: number) => s >= 85 ? "#00d084" : s >= 65 ? "#fbbf24" : "#ff4d4d";
+  const stateChartData = stats
+    ? Object.entries(stats.byState).sort((a: any, b: any) => (b[1] as number) - (a[1] as number)).slice(0, 8).map(([k, v]) => ({ state: k, count: v }))
+    : [];
 
   return (
-    <>
-      <Helmet>
-        <title>Command Center | HealthLead Pro</title>
-        <meta name="robots" content="noindex, nofollow" />
-      </Helmet>
+    <div className="min-h-screen bg-[#070d1a] flex flex-col">
       <Header />
+      <main className="flex-1 p-4 md:p-6 max-w-screen-2xl mx-auto w-full">
 
-      <div className="min-h-screen bg-[#070d1a] text-[#c8daf0]">
-        {/* KPI Strip */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-[#1e2d4a]">
-          {kpis.map(({ label, value, sub, up, color, spark, icon: Icon }) => (
-            <div key={label} className="flex items-center gap-3 px-5 py-3 border-r border-[#1e2d4a] last:border-r-0">
-              <div className="w-9 h-9 rounded-sm flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}18` }}>
-                <Icon className="w-5 h-5" style={{ color }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-mono tracking-widest text-[#4a6080] uppercase">{label}</p>
-                <p className="text-[17px] font-mono font-bold" style={{ color }}>{value}</p>
-                <p className={`text-[9px] font-mono flex items-center gap-0.5 ${up ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
-                  {up ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
-                  {sub}
-                </p>
-              </div>
-              <MiniSparkline data={spark} color={color} />
-            </div>
-          ))}
-        </div>
-
-        {/* Tab Nav */}
-        <div className="flex border-b border-[#1e2d4a] bg-[#050a14]">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-1.5 panel-tab ${activeTab === id ? "panel-tab-active" : ""}`}>
-              <Icon className="w-3 h-3" />{label}
-            </button>
-          ))}
-          <div className="flex items-center gap-2 ml-auto px-4">
-            <div className="flex items-center gap-1.5">
-              <Radio className="w-3 h-3 text-[#00d084] animate-pulse" />
-              <span className="text-[10px] font-mono text-[#00d084]">LIVE DATA</span>
-            </div>
+        {/* Page header */}
+        <div className="flex items-center gap-3 mb-4">
+          <Shield className="w-5 h-5 text-[#ff4d4d]" />
+          <div>
+            <h1 className="text-[14px] font-mono font-bold text-[#c8daf0] tracking-widest">COMMAND CENTER</h1>
+            <p className="text-[10px] font-mono text-[#4a6080]">Administration & intelligence hub</p>
           </div>
         </div>
 
-        <div className="overflow-auto" style={{ height: "calc(100vh - 180px)" }}>
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-0 border-b border-[#1e2d4a] mb-5">
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 px-4 py-3 text-[10px] font-mono tracking-widest border-b-2 transition-all -mb-px ${
+                tab === t.id ? "text-[#38bdf8] border-[#38bdf8]" : "text-[#4a6080] border-transparent hover:text-[#94b4d4]"
+              }`}>
+              <t.icon className="w-3.5 h-3.5" />
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-          {/* OVERVIEW TAB */}
-          {activeTab === "overview" && (
-            <div className="p-4 space-y-4">
-              {/* Main Charts Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="terminal-card lg:col-span-2">
-                  <div className="terminal-header flex items-center justify-between">
-                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">LEAD ACQUISITION & REVENUE — 7 DAY</span>
-                    <div className="flex gap-3">
-                      {[["#38bdf8", "Leads"], ["#00d084", "Revenue $"]].map(([c, l]) => (
-                        <div key={l} className="flex items-center gap-1">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
-                          <span className="text-[9px] font-mono text-[#4a6080]">{l}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="p-4 h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={volumeHistory}>
-                        <defs>
-                          <linearGradient id="leadsGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
-                        <YAxis yAxisId="left" />
-                        <YAxis yAxisId="right" orientation="right" />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Area yAxisId="left" type="monotone" dataKey="leads" stroke="#38bdf8" fill="url(#leadsGrad)" strokeWidth={2} name="Leads" />
-                        <Bar yAxisId="right" dataKey="revenue" fill="#00d084" fillOpacity={0.4} radius={[2, 2, 0, 0]} name="Revenue $" />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
+        {/* ── OVERVIEW ────────────────────────────────────────────────────── */}
+        {tab === "overview" && (
+          <div className="space-y-5 fade-in">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {[
+                { label: "TOTAL",     value: stats?.total ?? "—",                color: "text-[#38bdf8]"  },
+                { label: "NEW",       value: stats?.byStatus?.new ?? "—",        color: "text-[#38bdf8]"  },
+                { label: "CONTACTED", value: stats?.byStatus?.contacted ?? "—",  color: "text-[#fbbf24]"  },
+                { label: "QUALIFIED", value: stats?.byStatus?.qualified ?? "—",  color: "text-[#a78bfa]"  },
+                { label: "CONVERTED", value: stats?.byStatus?.converted ?? "—",  color: "text-[#00d084]"  },
+                { label: "ARCHIVED",  value: stats?.byStatus?.archived ?? "—",   color: "text-[#4a6080]"  },
+                { label: "TCPA ✓",   value: stats?.tcpaCount ?? "—",            color: "text-[#00d084]"  },
+                { label: "DNC",       value: stats?.dncCount ?? "—",             color: "text-[#ff4d4d]"  },
+                { label: "ACA INT",   value: stats?.acaCount ?? "—",             color: "text-[#38bdf8]"  },
+                { label: "MEDICARE",  value: stats?.medicareCount ?? "—",        color: "text-[#a78bfa]"  },
+                { label: "FINAL EXP", value: stats?.finalExpCount ?? "—",        color: "text-[#00d084]"  },
+                { label: "TODAY",     value: stats?.today ?? "—",                color: "text-[#fbbf24]"  },
+              ].map(k => (
+                <div key={k.label} className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+                  <div className={`text-[22px] font-mono font-bold num ${k.color}`}>{k.value}</div>
+                  <div className="text-[8px] font-mono text-[#3a5070] tracking-widest mt-1">{k.label}</div>
                 </div>
+              ))}
+            </div>
 
-                <div className="terminal-card">
-                  <div className="terminal-header">
-                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">INDUSTRY BREAKDOWN</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+                <p className="text-[10px] font-mono tracking-widest text-[#4a6080] mb-4">STATUS DISTRIBUTION</p>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={Object.entries(stats?.byStatus || {}).map(([k, v]) => ({ name: k, count: v }))} barSize={28}>
+                    <XAxis dataKey="name" tick={{ fill: "#4a6080", fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "#2a4060", fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} width={24} />
+                    <Tooltip contentStyle={{ background: "#0d1526", border: "1px solid #1e2d4a", fontFamily: "monospace", fontSize: 10, color: "#c8daf0" }} cursor={{ fill: "rgba(37,99,235,0.05)" }} />
+                    <Bar dataKey="count" radius={[2,2,0,0]}>
+                      {Object.keys(stats?.byStatus || {}).map((k, i) => <Cell key={i} fill={STATUS_COLORS[k] || "#4a6080"} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+                <p className="text-[10px] font-mono tracking-widest text-[#4a6080] mb-4">TOP STATES BY VOLUME</p>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={stateChartData} barSize={22}>
+                    <XAxis dataKey="state" tick={{ fill: "#4a6080", fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "#2a4060", fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} width={24} />
+                    <Tooltip contentStyle={{ background: "#0d1526", border: "1px solid #1e2d4a", fontFamily: "monospace", fontSize: 10, color: "#c8daf0" }} cursor={{ fill: "rgba(37,99,235,0.05)" }} />
+                    <Bar dataKey="count" fill="#2563eb" radius={[2,2,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Listings overview */}
+            <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+              <p className="text-[10px] font-mono tracking-widest text-[#4a6080] mb-3">MARKETPLACE OVERVIEW</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <div className="text-[22px] font-mono font-bold text-[#a78bfa] num">{listings.length}</div>
+                  <div className="text-[9px] font-mono text-[#4a6080]">TOTAL LISTINGS</div>
+                </div>
+                <div>
+                  <div className="text-[22px] font-mono font-bold text-[#00d084] num">{listings.filter(l => l.isActive).length}</div>
+                  <div className="text-[9px] font-mono text-[#4a6080]">ACTIVE LISTINGS</div>
+                </div>
+                <div>
+                  <div className="text-[22px] font-mono font-bold text-[#38bdf8] num">
+                    ${listings.length ? (listings.reduce((s: number, l: any) => s + parseFloat(l.price), 0) / listings.length).toFixed(2) : "0.00"}
                   </div>
-                  <div className="p-4 h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={industryBreakdown} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" />
-                        <YAxis dataKey="name" type="category" width={65} tick={{ fontSize: 10, fill: "#4a6080" }} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="volume" fill="#38bdf8" fillOpacity={0.8} radius={[0, 2, 2, 0]} name="Volume" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <div className="text-[9px] font-mono text-[#4a6080]">AVG PRICE</div>
+                </div>
+                <div>
+                  <div className="text-[22px] font-mono font-bold text-[#fbbf24] num">
+                    {listings.length ? Math.round(listings.reduce((s: number, l: any) => s + l.qualityScore, 0) / listings.length) : 0}
                   </div>
+                  <div className="text-[9px] font-mono text-[#4a6080]">AVG QUALITY</div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
 
-              {/* Industry Table */}
-              <div className="terminal-card">
-                <div className="terminal-header flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">PERFORMANCE BY SEGMENT</span>
-                  <span className="text-[9px] font-mono text-[#2a4060]">Updated: {new Date().toLocaleTimeString("en-US", { hour12: false })}</span>
-                </div>
-                <table className="w-full text-[11px] font-mono">
+        {/* ── LEAD DB ─────────────────────────────────────────────────────── */}
+        {tab === "leads" && (
+          <div className="fade-in space-y-3">
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-48">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#2a4060]" />
+                <input value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Search name, email, phone, zip, state..."
+                  className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono pl-9 pr-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+              </div>
+              {[
+                { value: filterState, set: setFilterState, opts: ["ALL STATES", ...STATES], keys: ["", ...STATES] },
+              ].map(f => null)}
+              <select value={filterState} onChange={e => setFilterState(e.target.value)}
+                className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                <option value="">ALL STATES</option>
+                {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                <option value="">ALL STATUS</option>
+                {STATUS_OPTS.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+              </select>
+              <select value={filterTcpa} onChange={e => setFilterTcpa(e.target.value)}
+                className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                <option value="">ALL TCPA</option>
+                <option value="true">TCPA ✓</option>
+                <option value="false">NO TCPA</option>
+              </select>
+              <select value={filterDnc} onChange={e => setFilterDnc(e.target.value)}
+                className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                <option value="false">EXCLUDE DNC</option>
+                <option value="true">DNC ONLY</option>
+                <option value="">ALL LEADS</option>
+              </select>
+              <button onClick={handleExport}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#060e1c] border border-[#1e2d4a] hover:border-[#2563eb] text-[#4a6080] hover:text-[#38bdf8] text-[10px] font-mono rounded-sm transition-colors">
+                <Download className="w-3.5 h-3.5" /> CSV
+              </button>
+            </div>
+
+            {/* Bulk bar */}
+            {selected.size > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-[#0d1a2d] border border-[#2563eb] rounded-sm">
+                <span className="text-[10px] font-mono text-[#38bdf8]">{selected.size} SELECTED</span>
+                <button onClick={() => bulkDncMutation.mutate(Array.from(selected))}
+                  disabled={bulkDncMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1a0808] border border-[#ff4d4d40] text-[#ff4d4d] text-[10px] font-mono rounded-sm hover:border-[#ff4d4d] transition-colors">
+                  <PhoneOff className="w-3 h-3" /> BULK DNC
+                </button>
+                <button onClick={() => setSelected(new Set())}
+                  className="text-[9px] font-mono text-[#4a6080] hover:text-[#94b4d4] ml-auto">CLEAR</button>
+              </div>
+            )}
+
+            {/* Table */}
+            <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
                   <thead>
                     <tr className="border-b border-[#1e2d4a]">
-                      {["SEGMENT", "VOLUME", "AVG PRICE", "AVG QUALITY", "TREND"].map(h => (
-                        <th key={h} className="text-left px-4 py-2 text-[9px] tracking-widest text-[#4a6080]">{h}</th>
+                      <th className="px-3 py-2.5 text-left">
+                        <button onClick={toggleAll} className="text-[#4a6080] hover:text-[#38bdf8]">
+                          {selected.size === leads.length && leads.length > 0
+                            ? <CheckSquare className="w-3.5 h-3.5 text-[#38bdf8]" />
+                            : <Square className="w-3.5 h-3.5" />}
+                        </button>
+                      </th>
+                      {["NAME","STATE","INTEREST","STATUS","TCPA","SCORE","DNC","ACTIONS"].map(h => (
+                        <th key={h} className="px-3 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070] whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody>
-                    {industryBreakdown.map((row, i) => (
-                      <tr key={row.name} className="ticker-row">
-                        <td className="px-4 py-2.5 font-bold text-[#c8daf0]">{row.name.toUpperCase()}</td>
-                        <td className="px-4 py-2.5 text-[#94b4d4]">{row.volume}</td>
-                        <td className="px-4 py-2.5 text-[#00d084] font-bold">${row.avgPrice}</td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 bg-[#0d1526] rounded-full overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${row.quality}%`, backgroundColor: qColor(row.quality) }} />
+                  <tbody className="divide-y divide-[#0a1120]">
+                    {leadsLoading ? (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <tr key={i}>{Array.from({ length: 9 }).map((_, j) => (
+                          <td key={j} className="px-3 py-3"><div className="h-3 shimmer rounded" /></td>
+                        ))}</tr>
+                      ))
+                    ) : leads.length === 0 ? (
+                      <tr><td colSpan={9} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">
+                        NO LEADS FOUND — adjust filters or capture new leads
+                      </td></tr>
+                    ) : leads.map((l: any) => (
+                      <>
+                        <tr key={l.id}
+                          className={`hover:bg-[#0a1628] transition-colors cursor-pointer group ${l.dnc ? "opacity-50" : ""}`}
+                          onClick={() => setExpanded(expanded === l.id ? null : l.id)}>
+                          <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => toggleOne(l.id)} className="text-[#4a6080] hover:text-[#38bdf8]">
+                              {selected.has(l.id) ? <CheckSquare className="w-3.5 h-3.5 text-[#38bdf8]" /> : <Square className="w-3.5 h-3.5" />}
+                            </button>
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <div className="text-[11px] font-mono font-semibold text-[#c8daf0]">{l.firstName} {l.lastName}</div>
+                            <div className="text-[9px] font-mono text-[#3a5070]">{l.email}</div>
+                          </td>
+                          <td className="px-3 py-3 text-[11px] font-mono text-[#94b4d4]">{l.state}</td>
+                          <td className="px-3 py-3">
+                            <div className="flex gap-1 flex-wrap">
+                              {l.interestedInACA     && <span className="text-[8px] font-mono text-[#38bdf8] bg-[#0a1a2a] px-1.5 py-0.5 rounded-sm">ACA</span>}
+                              {l.interestedInMedicare && <span className="text-[8px] font-mono text-[#a78bfa] bg-[#1a0a2a] px-1.5 py-0.5 rounded-sm">MED</span>}
+                              {l.interestedInFinalExpense && <span className="text-[8px] font-mono text-[#00d084] bg-[#0a2a1a] px-1.5 py-0.5 rounded-sm">FE</span>}
                             </div>
-                            <span style={{ color: qColor(row.quality) }}>{row.quality}%</span>
+                          </td>
+                          <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                            {editStatus[l.id] !== undefined ? (
+                              <div className="flex items-center gap-1">
+                                <select value={editStatus[l.id]}
+                                  onChange={e => setEditStatus(prev => ({ ...prev, [l.id]: e.target.value }))}
+                                  className="bg-[#060e1c] border border-[#2563eb] text-[#38bdf8] text-[9px] font-mono px-2 py-1 rounded-sm focus:outline-none">
+                                  {STATUS_OPTS.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+                                </select>
+                                <button onClick={() => handleStatusSave(l.id)}
+                                  className="text-[#00d084] hover:text-[#00ff9d] p-0.5">✓</button>
+                                <button onClick={() => setEditStatus(prev => { const n = { ...prev }; delete n[l.id]; return n; })}
+                                  className="text-[#4a6080] hover:text-[#94b4d4] p-0.5">✗</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setEditStatus(prev => ({ ...prev, [l.id]: l.status || "new" }))}
+                                className="group/s flex items-center gap-1.5">
+                                <StatusBadge status={l.status} />
+                                <Edit3 className="w-2.5 h-2.5 text-[#2a4060] opacity-0 group-hover/s:opacity-100 transition-opacity" />
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className={`text-[10px] font-mono ${l.tcpaConsent ? "text-[#00d084]" : "text-[#4a6080]"}`}>
+                              {l.tcpaConsent ? "✓ YES" : "✗ NO"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[11px] font-mono font-bold num" style={{ color: (l.leadScore||50) >= 80 ? "#00d084" : (l.leadScore||50) >= 60 ? "#fbbf24" : "#ff4d4d" }}>
+                                {l.leadScore || 50}
+                              </span>
+                              <div className="w-10 h-1.5 bg-[#0a1120] rounded-full overflow-hidden">
+                                <div className="h-full pipeline-bar rounded-full"
+                                  style={{ width: `${l.leadScore||50}%`, background: (l.leadScore||50) >= 80 ? "#00d084" : (l.leadScore||50) >= 60 ? "#fbbf24" : "#ff4d4d" }} />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className={`text-[10px] font-mono ${l.dnc ? "text-[#ff4d4d]" : "text-[#2a4060]"}`}>
+                              {l.dnc ? "DNC" : "—"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {!l.dnc && (
+                                <button onClick={() => dncMutation.mutate(l.id)} title="Mark DNC"
+                                  className="p-1 hover:bg-[#1a0808] text-[#4a6080] hover:text-[#ff4d4d] rounded-sm transition-colors">
+                                  <PhoneOff className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {expanded === l.id
+                                ? <ChevronDown className="w-3.5 h-3.5 text-[#38bdf8]" />
+                                : <ChevronRight className="w-3.5 h-3.5 text-[#4a6080]" />}
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Expanded row */}
+                        {expanded === l.id && (
+                          <tr key={`exp-${l.id}`}>
+                            <td colSpan={9} className="px-6 py-4 bg-[#060e1c] border-t border-[#1a2a42]">
+                              <div className="slide-down grid grid-cols-2 md:grid-cols-4 gap-5">
+                                <div>
+                                  <p className="text-[9px] font-mono text-[#3a5070] tracking-widest mb-2">CONTACT</p>
+                                  <p className="text-[11px] font-mono text-[#94b4d4]">{l.phoneNumber}</p>
+                                  <p className="text-[10px] font-mono text-[#4a6080]">{l.email}</p>
+                                  <p className="text-[10px] font-mono text-[#4a6080]">{l.zipCode}, {l.state}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-mono text-[#3a5070] tracking-widest mb-2">PROFILE</p>
+                                  <p className="text-[10px] font-mono text-[#4a6080]">DOB: {l.dateOfBirth || "—"}</p>
+                                  <p className="text-[10px] font-mono text-[#4a6080]">Income: {l.annualIncome ? `$${Number(l.annualIncome).toLocaleString()}` : "—"}</p>
+                                  <p className="text-[10px] font-mono text-[#4a6080]">Household: {l.householdSize || "—"}</p>
+                                  <p className="text-[10px] font-mono text-[#4a6080]">Source: {l.source || "web_form"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-mono text-[#3a5070] tracking-widest mb-2">ELIGIBILITY</p>
+                                  <p className={`text-[10px] font-mono ${l.hasMedicaidMedicareVA ? "text-[#fbbf24]" : "text-[#4a6080]"}`}>Medicaid/VA: {l.hasMedicaidMedicareVA ? "YES" : "NO"}</p>
+                                  <p className={`text-[10px] font-mono ${l.tcpaConsent ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>TCPA: {l.tcpaConsent ? "✓ CONSENTED" : "✗ NOT CONSENTED"}</p>
+                                  <p className={`text-[10px] font-mono ${l.dnc ? "text-[#ff4d4d]" : "text-[#4a6080]"}`}>DNC: {l.dnc ? "YES" : "NO"}</p>
+                                  <p className="text-[10px] font-mono text-[#4a6080]">Aging Score: {l.agingScore ?? 100}%</p>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-mono text-[#3a5070] tracking-widest mb-2">NOTES & TAGS</p>
+                                  <p className="text-[10px] font-mono text-[#4a6080]">{l.notes || "No notes recorded."}</p>
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {(l.tags || []).map((tag: string, i: number) => (
+                                      <span key={i} className="text-[8px] font-mono text-[#a78bfa] bg-[#1a0a2a] px-2 py-0.5 rounded-sm">{tag}</span>
+                                    ))}
+                                  </div>
+                                  <p className="text-[9px] font-mono text-[#2a4060] mt-2">Captured: {new Date(l.createdAt).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-2.5 border-t border-[#1e2d4a] flex items-center justify-between">
+                <span className="text-[10px] font-mono text-[#3a5070]">{leads.length} LEADS SHOWN</span>
+                <span className="text-[9px] font-mono text-[#2a4060]">Click row to expand · Click status badge to edit inline</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── LISTINGS ────────────────────────────────────────────────────── */}
+        {tab === "listings" && (
+          <div className="fade-in">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-mono text-[#4a6080]">{listings.length} TOTAL · {listings.filter(l => l.isActive).length} ACTIVE</span>
+              <button onClick={() => window.open("/api/export/listings", "_blank")}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#060e1c] border border-[#1e2d4a] hover:border-[#2563eb] text-[#4a6080] hover:text-[#38bdf8] text-[10px] font-mono rounded-sm transition-colors">
+                <Download className="w-3.5 h-3.5" /> EXPORT
+              </button>
+            </div>
+            <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#1e2d4a]">
+                      {["ID","LEAD","INDUSTRY","GEO","PRICE","QUALITY","RESOLD","FEATURED","STATUS","LISTED"].map(h => (
+                        <th key={h} className="px-3 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070] whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#0a1120]">
+                    {listings.map((l: any) => (
+                      <tr key={l.id} className="hover:bg-[#0a1628] transition-colors">
+                        <td className="px-3 py-3 text-[11px] font-mono text-[#4a6080] num">{l.id}</td>
+                        <td className="px-3 py-3 text-[11px] font-mono text-[#94b4d4] num">{l.leadId}</td>
+                        <td className="px-3 py-3 text-[10px] font-mono text-[#94b4d4]">{l.industry?.toUpperCase()}</td>
+                        <td className="px-3 py-3 text-[10px] font-mono text-[#94b4d4]">{l.geography}</td>
+                        <td className="px-3 py-3 text-[12px] font-mono font-bold text-[#00d084] num">${l.price}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-mono font-bold num" style={{ color: l.qualityScore>=90?"#00d084":l.qualityScore>=75?"#fbbf24":"#ff4d4d" }}>{l.qualityScore}</span>
+                            <div className="w-10 h-1 bg-[#0a1120] rounded-full overflow-hidden">
+                              <div className="h-full pipeline-bar rounded-full" style={{ width:`${l.qualityScore}%`, background: l.qualityScore>=90?"#00d084":l.qualityScore>=75?"#fbbf24":"#ff4d4d" }} />
+                            </div>
                           </div>
                         </td>
-                        <td className="px-4 py-2.5">
-                          <span className={`flex items-center gap-1 ${i % 3 !== 2 ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
-                            {i % 3 !== 2 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                            {i % 3 !== 2 ? "+4.2%" : "-1.8%"}
+                        <td className="px-3 py-3 text-[11px] font-mono text-[#4a6080] num">{l.timesResold}</td>
+                        <td className="px-3 py-3">
+                          {l.featured ? <span className="badge-featured">FEATURED</span> : <span className="text-[#2a4060] text-[9px] font-mono">—</span>}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className={`text-[10px] font-mono font-bold ${l.isActive?"text-[#00d084]":"text-[#4a6080]"}`}>
+                            {l.isActive ? "ACTIVE" : "SOLD"}
                           </span>
+                        </td>
+                        <td className="px-3 py-3 text-[9px] font-mono text-[#2a4060]">{new Date(l.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── NEW LISTING ──────────────────────────────────────────────────── */}
+        {tab === "new" && (
+          <div className="fade-in max-w-xl">
+            <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-6">
+              <p className="text-[10px] font-mono tracking-widest text-[#4a6080] mb-5">CREATE MARKETPLACE LISTING</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">LEAD ID</label>
+                  <input type="number" value={newListing.leadId} onChange={e => setNewListing(p => ({ ...p, leadId: e.target.value }))}
+                    placeholder="Enter lead ID from the database"
+                    className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">PRICE ($)</label>
+                  <input type="number" value={newListing.price} onChange={e => setNewListing(p => ({ ...p, price: e.target.value }))}
+                    placeholder="e.g. 42.00"
+                    className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">INDUSTRY</label>
+                  <select value={newListing.industry} onChange={e => setNewListing(p => ({ ...p, industry: e.target.value }))}
+                    className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb]">
+                    {["healthcare","medicare","insurance","final_expense","dental","vision"].map(i => <option key={i} value={i}>{i.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">GEOGRAPHY (STATE CODE)</label>
+                  <input value={newListing.geography} onChange={e => setNewListing(p => ({ ...p, geography: e.target.value.toUpperCase() }))}
+                    placeholder="FL" maxLength={2}
+                    className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
+                </div>
+                <button
+                  onClick={() => createListingMutation.mutate({ leadId: parseInt(newListing.leadId), price: newListing.price, industry: newListing.industry, geography: newListing.geography, qualityScore: 85, timesResold: 0, isActive: true, featured: false, sellerId: 1 })}
+                  disabled={createListingMutation.isPending || !newListing.leadId || !newListing.price}
+                  className="w-full py-3 bg-[#0d1e3a] hover:bg-[#1a3a6b] border border-[#2563eb] text-[#38bdf8] font-mono font-bold text-[12px] rounded-sm transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  {createListingMutation.isPending ? "LISTING..." : "CREATE LISTING →"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── MARKET DATA ─────────────────────────────────────────────────── */}
+        {tab === "market" && (
+          <div className="fade-in space-y-5">
+            <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[10px] font-mono tracking-widest text-[#4a6080]">AI DEMAND PREDICTIONS</p>
+                <div className="flex gap-2">
+                  <select value={genPred.industry} onChange={e => setGenPred(p => ({ ...p, industry: e.target.value }))}
+                    className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none">
+                    {["healthcare","medicare","insurance"].map(i => <option key={i} value={i}>{i}</option>)}
+                  </select>
+                  <select value={genPred.geography} onChange={e => setGenPred(p => ({ ...p, geography: e.target.value }))}
+                    className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[10px] font-mono px-2 py-1.5 rounded-sm focus:outline-none">
+                    {["CA","FL","TX","NY","AZ","GA","IL"].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <button onClick={() => generatePredMutation.mutate(genPred)} disabled={generatePredMutation.isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0d1e3a] border border-[#2563eb] text-[#38bdf8] text-[10px] font-mono rounded-sm hover:bg-[#1a3a6b] transition-colors disabled:opacity-40">
+                    <RefreshCw className={`w-3 h-3 ${generatePredMutation.isPending ? "animate-spin" : ""}`} /> GENERATE
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {predictions.slice(0, 8).map((p: any) => (
+                  <div key={p.id} className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[9px] font-mono text-[#4a6080]">{p.industry?.toUpperCase()}/{p.geography}</span>
+                      <span className="text-[9px] font-mono text-[#2a4060]">{parseFloat(p.confidence).toFixed(0)}% conf</span>
+                    </div>
+                    <div className="text-[26px] font-mono font-bold num" style={{ color: p.predictedDemand>=85?"#00d084":p.predictedDemand>=70?"#fbbf24":"#ff4d4d" }}>
+                      {p.predictedDemand}
+                    </div>
+                    <div className="text-[8px] font-mono text-[#3a5070] mb-2">DEMAND INDEX</div>
+                    <div className="h-1 bg-[#0a1120] rounded-full overflow-hidden">
+                      <div className="h-full pipeline-bar rounded-full" style={{ width:`${p.predictedDemand}%`, background: p.predictedDemand>=85?"#00d084":p.predictedDemand>=70?"#fbbf24":"#ff4d4d" }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
+              <p className="text-[10px] font-mono tracking-widest text-[#4a6080] mb-4">MARKET TREND DATA — VOLUME & AVG PRICE</p>
+              {trends.length > 0 ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={trends.slice(0, 20)}>
+                    <XAxis dataKey="id" tick={{ fill: "#4a6080", fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "#2a4060", fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} width={38} />
+                    <Tooltip contentStyle={{ background: "#0d1526", border: "1px solid #1e2d4a", fontFamily: "monospace", fontSize: 10, color: "#c8daf0" }} />
+                    <Line type="monotone" dataKey="volume"   stroke="#38bdf8" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="avgPrice" stroke="#00d084" dot={false} strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-center text-[11px] font-mono text-[#2a4060] py-10">No trend data available</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── USERS ───────────────────────────────────────────────────────── */}
+        {tab === "users" && (
+          <div className="fade-in">
+            <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-[#1e2d4a]">
+                <span className="text-[10px] font-mono tracking-widest text-[#4a6080]">USER ACCOUNTS — {allUsers.length} REGISTERED</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#1e2d4a]">
+                      {["ID","USERNAME","EMAIL","ROLE","REGISTERED"].map(h => (
+                        <th key={h} className="px-4 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070]">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#0a1120]">
+                    {allUsers.length === 0 ? (
+                      <tr><td colSpan={5} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO USERS</td></tr>
+                    ) : allUsers.map((u: any) => (
+                      <tr key={u.id} className="hover:bg-[#0a1628] transition-colors">
+                        <td className="px-4 py-3 text-[11px] font-mono text-[#4a6080] num">{u.id}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-[#1a3a6b] flex items-center justify-center">
+                              <span className="text-[9px] font-bold text-[#38bdf8]">{u.username[0].toUpperCase()}</span>
+                            </div>
+                            <span className="text-[11px] font-mono text-[#c8daf0]">{u.username}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-[10px] font-mono text-[#4a6080]">{u.email || "—"}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-[10px] font-mono font-bold ${u.role==="admin"?"text-[#ff4d4d]":u.role==="agent"?"text-[#00d084]":"text-[#fbbf24]"}`}>
+                            {u.role?.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-[10px] font-mono text-[#2a4060]">
+                          {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-
-              {/* Recent Activity */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="terminal-card">
-                  <div className="terminal-header">
-                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">RECENT LEADS</span>
-                  </div>
-                  <div className="divide-y divide-[#111e33]">
-                    {leads.slice(0, 5).map((lead: Lead) => (
-                      <div key={lead.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[#0f1e35] transition-colors">
-                        <div>
-                          <p className="text-[11px] font-mono font-semibold text-[#94b4d4]">{lead.firstName} {lead.lastName}</p>
-                          <p className="text-[10px] text-[#2a4060]">{lead.state} · {new Date(lead.createdAt).toLocaleDateString()}</p>
-                        </div>
-                        <div className="flex gap-1">
-                          {getInterests(lead).map(({ label, color }) => (
-                            <span key={label} className="text-[9px] px-1.5 py-0.5 rounded-sm font-mono border" style={{ color, borderColor: `${color}40`, backgroundColor: `${color}10` }}>
-                              {label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    {leads.length === 0 && <p className="text-center py-6 text-[#2a4060] font-mono text-xs">NO LEADS YET</p>}
-                  </div>
-                </div>
-
-                <div className="terminal-card">
-                  <div className="terminal-header">
-                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">RECENT LISTINGS</span>
-                  </div>
-                  <div className="divide-y divide-[#111e33]">
-                    {listings.slice(0, 5).map((l: LeadListing) => (
-                      <div key={l.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[#0f1e35] transition-colors">
-                        <div>
-                          <p className="text-[11px] font-mono font-semibold text-[#94b4d4]">{l.industry.toUpperCase()} · {l.geography}</p>
-                          <p className="text-[10px] text-[#2a4060]">Lead #{l.leadId} · Q:{l.qualityScore}%</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-mono font-bold text-[#00d084] text-sm">${parseFloat(l.price).toFixed(2)}</p>
-                          <span className={`text-[9px] font-mono ${l.isActive ? "text-[#00d084]" : "text-[#4a6080]"}`}>
-                            {l.isActive ? "● ACTIVE" : "○ SOLD"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                    {listings.length === 0 && <p className="text-center py-6 text-[#2a4060] font-mono text-xs">NO LISTINGS YET</p>}
-                  </div>
-                </div>
-              </div>
             </div>
-          )}
-
-          {/* LEADS TAB */}
-          {activeTab === "leads" && (
-            <div className="p-4">
-              <div className="terminal-card">
-                <div className="terminal-header flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">LEAD DATABASE — {leads.length} RECORDS</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[9px] font-mono text-[#2a4060]">SORT: {sortField.toUpperCase()} {sortDir.toUpperCase()}</span>
-                    <a href="/api/export/leads" target="_blank" rel="noreferrer"
-                      className="btn-terminal flex items-center gap-1 text-[10px]">
-                      <Download className="w-3 h-3" /> CSV
-                    </a>
-                  </div>
-                </div>
-                <div className="overflow-auto">
-                  <table className="w-full text-[11px] font-mono border-collapse">
-                    <thead className="sticky top-0 bg-[#050a14] z-10">
-                      <tr className="border-b border-[#1e2d4a]">
-                        {[
-                          { label: "#",        field: "id"        },
-                          { label: "NAME",     field: null        },
-                          { label: "STATE",    field: "state"     },
-                          { label: "AGING",    field: null        },
-                          { label: "INTERESTS",field: null        },
-                          { label: "TCPA/DNC", field: null        },
-                          { label: "CAPTURED", field: "createdAt" },
-                        ].map(({ label, field }) => (
-                          <th key={label} onClick={() => field && handleSort(field)}
-                            className={`text-left px-3 py-2 text-[9px] tracking-widest text-[#4a6080] border-r border-[#111e33] last:border-r-0 ${field ? "cursor-pointer hover:text-[#94b4d4]" : ""}`}>
-                            <div className="flex items-center gap-1">
-                              {label}
-                              {field && sortField === field && (sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loadingLeads ? (
-                        Array.from({ length: 6 }).map((_, i) => (
-                          <tr key={i} className="border-b border-[#111e33]">
-                            {Array.from({ length: 7 }).map((_, j) => (
-                              <td key={j} className="px-3 py-2.5"><div className="h-3 bg-[#0d1526] rounded animate-pulse w-3/4" /></td>
-                            ))}
-                          </tr>
-                        ))
-                      ) : leads.length === 0 ? (
-                        <tr><td colSpan={7} className="text-center py-12 text-[#2a4060]">NO LEADS IN DATABASE</td></tr>
-                      ) : leads.map((lead: Lead) => {
-                        const hoursOld = Math.floor((Date.now() - new Date(lead.createdAt).getTime()) / 3_600_000);
-                        const ageColor = hoursOld < 4 ? "#00d084" : hoursOld < 24 ? "#fbbf24" : "#ff4d4d";
-                        return (
-                          <>
-                            <tr key={lead.id}
-                              onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? null : lead.id)}
-                              className={`ticker-row cursor-pointer ${expandedLeadId === lead.id ? "bg-[#0d1e35] border-l-2 border-l-[#2563eb]" : ""}`}>
-                              <td className="px-3 py-2.5 text-[#4a6080]">#{lead.id}</td>
-                              <td className="px-3 py-2.5 text-[#c8daf0] font-semibold">{lead.firstName} {lead.lastName}</td>
-                              <td className="px-3 py-2.5 text-[#38bdf8]">{lead.state}</td>
-                              <td className="px-3 py-2.5">
-                                <div className="flex items-center gap-1.5">
-                                  <Clock className="w-2.5 h-2.5" style={{ color: ageColor }} />
-                                  <span className="text-[10px] font-mono font-semibold" style={{ color: ageColor }}>
-                                    {hoursOld}h
-                                  </span>
-                                  {lead.agingScore != null && (
-                                    <span className="text-[9px] font-mono text-[#2a4060]">· {lead.agingScore}</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5">
-                                <div className="flex gap-1">
-                                  {getInterests(lead).map(({ label, color }) => (
-                                    <span key={label} className="text-[9px] px-1.5 py-0.5 rounded-sm border" style={{ color, borderColor: `${color}40`, backgroundColor: `${color}10` }}>{label}</span>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5">
-                                <div className="flex gap-1">
-                                  {lead.tcpaConsent
-                                    ? <span className="flex items-center gap-0.5 text-[9px] font-mono text-[#00d084] bg-[#00d08415] border border-[#00d08430] px-1.5 py-0.5 rounded-sm"><ShieldCheck className="w-2.5 h-2.5" /> TCPA</span>
-                                    : <span className="flex items-center gap-0.5 text-[9px] font-mono text-[#fbbf24] bg-[#fbbf2415] border border-[#fbbf2430] px-1.5 py-0.5 rounded-sm"><ShieldAlert className="w-2.5 h-2.5" /> NO CONSENT</span>
-                                  }
-                                  {lead.dnc && (
-                                    <span className="text-[9px] font-mono text-[#ff4d4d] bg-[#ff4d4d15] border border-[#ff4d4d30] px-1.5 py-0.5 rounded-sm">DNC</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5 text-[#2a4060]">{new Date(lead.createdAt).toLocaleDateString()}</td>
-                            </tr>
-                            {expandedLeadId === lead.id && (
-                              <tr key={`${lead.id}-detail`}>
-                                <td colSpan={7} className="px-4 py-3 border-b border-[#111e33] bg-[#070f1f]">
-                                  {/* Contact + compliance grid */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-[10px] font-mono">
-                                    {[
-                                      { label: "EMAIL",         value: lead.email },
-                                      { label: "PHONE",         value: lead.phoneNumber },
-                                      { label: "ZIP / DOB",     value: `${lead.zipCode || "—"} / ${lead.dateOfBirth || "—"}` },
-                                      { label: "MEDICAID/VA",   value: lead.hasMedicaidMedicareVA ? "⚠ Has Coverage" : "None" },
-                                    ].map(({ label, value }) => (
-                                      <div key={label} className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm px-2.5 py-2">
-                                        <p className="terminal-label">{label}</p>
-                                        <p className="text-[#94b4d4] mt-0.5 text-[10px]">{value}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                  {/* TCPA row */}
-                                  <div className="flex items-center gap-3 mb-3 text-[9px] font-mono">
-                                    <span className="text-[#2a4060]">TCPA:</span>
-                                    {lead.tcpaConsent
-                                      ? <span className="text-[#00d084]">Consented via {lead.tcpaConsentSource || "unknown"}</span>
-                                      : <span className="text-[#fbbf24]">No consent recorded</span>}
-                                    {lead.dnc && <span className="text-[#ff4d4d] ml-4 font-bold">DO NOT CALL — DNC registered</span>}
-                                  </div>
-                                  {/* Activity feed inline */}
-                                  <ActivityFeed leadId={lead.id} />
-                                </td>
-                              </tr>
-                            )}
-                          </>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* LISTINGS TAB */}
-          {activeTab === "listings" && (
-            <div className="p-4">
-              <div className="terminal-card">
-                <div className="terminal-header flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">MARKETPLACE LISTINGS — {listings.length} TOTAL · {activeListings.length} ACTIVE</span>
-                </div>
-                <div className="overflow-auto">
-                  <table className="w-full text-[11px] font-mono border-collapse">
-                    <thead className="sticky top-0 bg-[#050a14] z-10">
-                      <tr className="border-b border-[#1e2d4a]">
-                        {["ID", "LEAD ID", "INDUSTRY", "STATE", "PRICE", "QUALITY", "RESOLD", "STATUS", "LISTED"].map(h => (
-                          <th key={h} className="text-left px-3 py-2 text-[9px] tracking-widest text-[#4a6080] border-r border-[#111e33] last:border-r-0">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loadingListings ? (
-                        Array.from({ length: 6 }).map((_, i) => (
-                          <tr key={i} className="border-b border-[#111e33]">
-                            {Array.from({ length: 9 }).map((_, j) => (
-                              <td key={j} className="px-3 py-2.5">
-                                <div className="h-3 bg-[#0d1526] rounded animate-pulse w-3/4" />
-                              </td>
-                            ))}
-                          </tr>
-                        ))
-                      ) : listings.length === 0 ? (
-                        <tr><td colSpan={9} className="text-center py-12 text-[#2a4060]">NO LISTINGS FOUND</td></tr>
-                      ) : listings.map((l: LeadListing) => (
-                        <tr key={l.id} className="ticker-row">
-                          <td className="px-3 py-2.5 text-[#4a6080]">#{l.id}</td>
-                          <td className="px-3 py-2.5 text-[#4a6080]">#{l.leadId}</td>
-                          <td className="px-3 py-2.5">
-                            <span className={`font-semibold uppercase ${l.industry === "medicare" ? "text-[#a78bfa]" : l.industry === "healthcare" ? "text-[#38bdf8]" : "text-[#00d084]"}`}>
-                              {l.industry}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-[#38bdf8]">{l.geography}</td>
-                          <td className="px-3 py-2.5 text-[#00d084] font-bold">${parseFloat(l.price).toFixed(2)}</td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-2">
-                              <div className="w-12 h-1.5 bg-[#0d1526] rounded-full overflow-hidden">
-                                <div className="h-full rounded-full" style={{ width: `${l.qualityScore}%`, backgroundColor: qColor(l.qualityScore) }} />
-                              </div>
-                              <span style={{ color: qColor(l.qualityScore) }}>{l.qualityScore}</span>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span className={l.timesResold > 2 ? "text-[#ff4d4d]" : l.timesResold > 0 ? "text-[#fbbf24]" : "text-[#4a6080]"}>
-                              {l.timesResold}x
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span className={`text-[9px] px-2 py-0.5 rounded-sm font-mono ${l.isActive ? "text-[#00d084] bg-[#00d08418]" : "text-[#4a6080] bg-[#4a608018]"}`}>
-                              {l.isActive ? "● ACTIVE" : "○ SOLD"}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-[#2a4060]">{new Date(l.createdAt).toLocaleDateString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* CREATE LISTING TAB */}
-          {activeTab === "create" && (
-            <div className="p-4 max-w-2xl">
-              <div className="terminal-card">
-                <div className="terminal-header">
-                  <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">CREATE MARKETPLACE LISTING</span>
-                </div>
-                <div className="p-6 space-y-5">
-                  {/* Quick reference: recent leads */}
-                  {leads.length > 0 && (
-                    <div className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm p-3">
-                      <p className="terminal-label mb-2">RECENT LEAD IDs (click to auto-fill)</p>
-                      <div className="flex flex-wrap gap-2">
-                        {leads.slice(0, 8).map((l: Lead) => (
-                          <button key={l.id} onClick={() => setNewListing(p => ({ ...p, leadId: l.id.toString() }))}
-                            className={`text-[10px] font-mono px-2 py-1 rounded-sm border transition-colors ${newListing.leadId === l.id.toString() ? "border-[#2563eb] text-[#38bdf8] bg-[#0d1e3a]" : "border-[#1e2d4a] text-[#4a6080] hover:border-[#2a3d5a] hover:text-[#94b4d4]"}`}>
-                            #{l.id} — {l.firstName} {l.lastName[0]}.
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { key: "leadId", label: "LEAD ID", placeholder: "e.g. 42", type: "number" },
-                      { key: "price", label: "ASK PRICE ($)", placeholder: "e.g. 35.00", type: "number" },
-                    ].map(({ key, label, placeholder, type }) => (
-                      <div key={key}>
-                        <label className="terminal-label block mb-1.5">{label}</label>
-                        <input type={type} placeholder={placeholder}
-                          value={newListing[key as keyof typeof newListing]}
-                          onChange={e => setNewListing(p => ({ ...p, [key]: e.target.value }))}
-                          className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#1e2d4a]" />
-                      </div>
-                    ))}
-
-                    {[
-                      { key: "industry", label: "INDUSTRY", opts: [["", "— Select Industry —"], ["healthcare", "Healthcare"], ["insurance", "Insurance"], ["medicare", "Medicare"]] },
-                      { key: "geography", label: "STATE", opts: [["", "— Select State —"], ["CA", "California"], ["NY", "New York"], ["TX", "Texas"], ["FL", "Florida"], ["AZ", "Arizona"], ["IL", "Illinois"]] },
-                    ].map(({ key, label, opts }) => (
-                      <div key={key}>
-                        <label className="terminal-label block mb-1.5">{label}</label>
-                        <select value={newListing[key as keyof typeof newListing]}
-                          onChange={e => setNewListing(p => ({ ...p, [key]: e.target.value }))}
-                          className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
-                          {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="bg-[#060e1c] border border-[#1e2d4a] rounded-sm p-3 text-[11px] font-mono text-[#4a6080]">
-                    <p className="text-[9px] tracking-widest mb-1 text-[#2a4060]">LISTING PREVIEW</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[
-                        { label: "Lead", value: newListing.leadId ? `#${newListing.leadId}` : "—" },
-                        { label: "Price", value: newListing.price ? `$${newListing.price}` : "—" },
-                        { label: "Industry", value: newListing.industry || "—" },
-                        { label: "State", value: newListing.geography || "—" },
-                      ].map(({ label, value }) => (
-                        <div key={label}>
-                          <p className="terminal-label">{label}</p>
-                          <p className="text-[#38bdf8] font-bold">{value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <button onClick={handleCreateListing}
-                    disabled={createListingMutation.isPending}
-                    className="w-full py-3 bg-[#0d1e3a] hover:bg-[#1a3a6b] border border-[#2563eb] text-[#38bdf8] font-mono font-bold text-sm rounded-sm transition-colors flex items-center justify-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    {createListingMutation.isPending ? "SUBMITTING..." : "PUBLISH TO MARKETPLACE"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MARKET DATA TAB */}
-          {activeTab === "trends" && (() => {
-            // Build multi-segment chart data indexed by sequential position per industry
-            const byIndustry: Record<string, number[]> = {};
-            trends.forEach((t: any) => {
-              const k = t.industry.toLowerCase();
-              if (!byIndustry[k]) byIndustry[k] = [];
-              byIndustry[k].push(parseFloat(t.avgPrice));
-            });
-            const maxLen = Math.max(...Object.values(byIndustry).map(v => v.length), 0);
-            const multiChart = Array.from({ length: maxLen }, (_, i) => ({
-              i: i + 1,
-              healthcare: byIndustry["healthcare"]?.[i] ?? null,
-              medicare:   byIndustry["medicare"]?.[i]   ?? null,
-              insurance:  byIndustry["insurance"]?.[i]  ?? null,
-            }));
-
-            // Per-segment summary stats
-            const segStats = ["healthcare", "medicare", "insurance"].map(seg => {
-              const pts = byIndustry[seg] || [];
-              const avg = pts.length ? pts.reduce((s, v) => s + v, 0) / pts.length : 0;
-              const last = pts[pts.length - 1] ?? 0;
-              const prev = pts[pts.length - 2] ?? last;
-              const chg = prev ? ((last - prev) / prev) * 100 : 0;
-              return { seg, avg, last, chg, count: pts.length };
-            });
-
-            return (
-              <div className="p-4 space-y-4">
-                {/* Segment summary stats */}
-                <div className="grid grid-cols-3 gap-3">
-                  {segStats.map(({ seg, avg, last, chg, count }) => {
-                    const color = seg === "healthcare" ? "#38bdf8" : seg === "medicare" ? "#a78bfa" : "#00d084";
-                    return (
-                      <div key={seg} className="terminal-card p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[11px] font-mono font-bold uppercase" style={{ color }}>{seg}</span>
-                          <span className={`text-[10px] font-mono flex items-center gap-0.5 ${chg >= 0 ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
-                            {chg >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                            {Math.abs(chg).toFixed(1)}%
-                          </span>
-                        </div>
-                        <p className="text-2xl font-mono font-bold text-[#c8daf0]">${avg.toFixed(2)}</p>
-                        <p className="text-[9px] font-mono text-[#4a6080] mt-0.5">avg · {count} data pts · latest ${last.toFixed(2)}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Multi-segment chart */}
-                <div className="terminal-card">
-                  <div className="terminal-header flex items-center justify-between">
-                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">AVG PRICE BY SEGMENT — ALL INDUSTRIES</span>
-                    <div className="flex gap-3">
-                      {[["#38bdf8", "Healthcare"], ["#a78bfa", "Medicare"], ["#00d084", "Insurance"]].map(([c, l]) => (
-                        <div key={l} className="flex items-center gap-1">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
-                          <span className="text-[9px] font-mono text-[#4a6080]">{l}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="p-4 h-52">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={multiChart}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="i" tick={{ fontSize: 10, fill: "#4a6080" }} />
-                        <YAxis tick={{ fontSize: 10, fill: "#4a6080" }} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Line type="monotone" dataKey="healthcare" stroke="#38bdf8" strokeWidth={2} dot={false} name="Healthcare $" connectNulls />
-                        <Line type="monotone" dataKey="medicare"   stroke="#a78bfa" strokeWidth={2} dot={false} name="Medicare $"   connectNulls />
-                        <Line type="monotone" dataKey="insurance"  stroke="#00d084" strokeWidth={2} dot={false} name="Insurance $"  connectNulls />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Record new data point */}
-                <div className="terminal-card">
-                  <div className="terminal-header">
-                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">RECORD MARKET DATA POINT</span>
-                  </div>
-                  <div className="p-4 flex flex-wrap gap-3 items-end">
-                    <div>
-                      <label className="terminal-label block mb-1.5">INDUSTRY</label>
-                      <select value={trendIndustry} onChange={e => setTrendIndustry(e.target.value)}
-                        className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
-                        {["healthcare", "medicare", "insurance", "final expense"].map(v => <option key={v} value={v}>{v.toUpperCase()}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="terminal-label block mb-1.5">STATE</label>
-                      <select value={trendGeo} onChange={e => setTrendGeo(e.target.value)}
-                        className="bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2 rounded-sm focus:outline-none focus:border-[#2563eb]">
-                        {["CA", "FL", "TX", "NY", "AZ", "GA", "IL"].map(v => <option key={v} value={v}>{v}</option>)}
-                      </select>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => recordTrendMutation.mutate({ industry: trendIndustry, geography: trendGeo })}
-                        disabled={recordTrendMutation.isPending}
-                        className="btn-terminal flex items-center gap-1.5">
-                        <Zap className="w-3.5 h-3.5" />
-                        {recordTrendMutation.isPending ? "RECORDING…" : "RECORD SAMPLE"}
-                      </button>
-                      {["healthcare", "medicare", "insurance"].map(seg => (
-                        <button key={seg} onClick={() => recordTrendMutation.mutate({ industry: seg, geography: trendGeo })}
-                          disabled={recordTrendMutation.isPending}
-                          className="text-[9px] font-mono px-2 py-1.5 border border-[#1e2d4a] text-[#4a6080] hover:border-[#2a3d5a] hover:text-[#94b4d4] rounded-sm transition-colors">
-                          + {seg.slice(0, 4).toUpperCase()}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Trends raw data table */}
-                <div className="terminal-card">
-                  <div className="terminal-header">
-                    <span className="text-[10px] font-mono text-[#4a6080] tracking-widest">RAW DATA FEED — {trends.length} RECORDS</span>
-                  </div>
-                  {trends.length === 0 ? (
-                    <div className="text-center py-10">
-                      <p className="text-[#2a4060] font-mono text-sm">NO MARKET DATA YET — RECORD A DATA POINT ABOVE</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-auto max-h-64">
-                      <table className="w-full text-[11px] font-mono border-collapse">
-                        <thead className="sticky top-0 bg-[#050a14]">
-                          <tr className="border-b border-[#1e2d4a]">
-                            {["INDUSTRY", "STATE", "AVG PRICE", "VOLUME", "GROWTH RATE", "RECORDED"].map(h => (
-                              <th key={h} className="text-left px-4 py-2 text-[9px] tracking-widest text-[#4a6080] border-r border-[#111e33] last:border-r-0">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {trends.map((t: any) => {
-                            const growth = parseFloat(t.growthRate);
-                            return (
-                              <tr key={t.id} className="ticker-row">
-                                <td className="px-4 py-2 font-semibold uppercase"
-                                  style={{ color: t.industry === "medicare" ? "#a78bfa" : t.industry === "healthcare" ? "#38bdf8" : "#00d084" }}>
-                                  {t.industry}
-                                </td>
-                                <td className="px-4 py-2 text-[#94b4d4]">{t.geography}</td>
-                                <td className="px-4 py-2 text-[#00d084] font-bold">${parseFloat(t.avgPrice).toFixed(2)}</td>
-                                <td className="px-4 py-2 text-[#94b4d4]">{t.volume}</td>
-                                <td className="px-4 py-2">
-                                  <span className={`flex items-center gap-1 font-bold ${growth >= 0 ? "text-[#00d084]" : "text-[#ff4d4d]"}`}>
-                                    {growth >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                    {Math.abs(growth).toFixed(2)}%
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2 text-[#2a4060]">{new Date(t.recordedAt).toLocaleString()}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </div>
-    </>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
