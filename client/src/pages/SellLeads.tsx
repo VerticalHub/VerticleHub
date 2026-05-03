@@ -52,7 +52,7 @@ export default function SellLeads() {
 
   const { data: mySubsResp } = useQuery<any>({
     queryKey: ["/api/submissions/mine"],
-    queryFn: () => fetch("/api/submissions?userId=1").then(r => r.json()),
+    queryFn: () => fetch("/api/submissions").then(r => r.json()),
   });
   const mySubs: any[] = mySubsResp?.data || [];
 

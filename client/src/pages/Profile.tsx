@@ -47,21 +47,26 @@ export default function Profile() {
   });
   const me = meResp?.data;
 
+  const myId = me?.id;
+
   const { data: creditsResp, isLoading: creditsLoading } = useQuery<any>({
-    queryKey: ["/api/credits/1"],
-    queryFn: () => fetch("/api/credits/1").then(r => r.json()),
+    queryKey: ["/api/credits", myId],
+    queryFn: () => fetch(`/api/credits/${myId}`).then(r => r.json()),
+    enabled: !!myId,
   });
   const balance = parseFloat(creditsResp?.data?.balance || "0");
 
   const { data: txResp, isLoading: txLoading } = useQuery<any>({
-    queryKey: ["/api/credits/1/transactions"],
-    queryFn: () => fetch("/api/credits/1/transactions").then(r => r.json()),
+    queryKey: ["/api/credits", myId, "transactions"],
+    queryFn: () => fetch(`/api/credits/${myId}/transactions`).then(r => r.json()),
+    enabled: !!myId,
   });
   const transactions: any[] = txResp?.data || [];
 
   const { data: purchasesResp, isLoading: purchasesLoading } = useQuery<any>({
-    queryKey: ["/api/purchases/1/detailed"],
-    queryFn: () => fetch("/api/purchases/1/detailed").then(r => r.json()),
+    queryKey: ["/api/purchases", myId, "detailed"],
+    queryFn: () => fetch(`/api/purchases/${myId}/detailed`).then(r => r.json()),
+    enabled: !!myId,
   });
   const purchases: any[] = purchasesResp?.data || [];
 
@@ -88,7 +93,7 @@ export default function Profile() {
   const displayName = me?.displayName || me?.username || "—";
 
   const updateNameMutation = useMutation({
-    mutationFn: (name: string) => apiRequest("PATCH", "/api/users/1/display-name", { displayName: name }),
+    mutationFn: (name: string) => apiRequest("PATCH", `/api/users/${myId}/display-name`, { displayName: name }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setEditingName(false);

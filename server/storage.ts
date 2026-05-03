@@ -88,11 +88,13 @@ export interface IStorage {
   // Price Alerts
   createPriceAlert(alert: InsertPriceAlert): Promise<PriceAlert>;
   getPriceAlerts(userId: number): Promise<PriceAlert[]>;
+  getPriceAlertById(id: number): Promise<PriceAlert | undefined>;
   deletePriceAlert(id: number): Promise<void>;
   triggerPriceAlert(id: number): Promise<void>;
 
   // Alerts
   createAlert(alert: InsertAlert): Promise<Alert>;
+  getAlertById(id: number): Promise<Alert | undefined>;
   getUnreadAlerts(userId: number): Promise<Alert[]>;
   getAllAlerts(userId: number): Promise<Alert[]>;
   markAlertRead(alertId: number): Promise<void>;
@@ -155,7 +157,7 @@ export class DatabaseStorage implements IStorage {
     return u;
   }
   async getAllUsers() {
-    return db.select({ id: users.id, username: users.username, email: users.email, role: users.role, createdAt: users.createdAt, password: users.password }).from(users).orderBy(desc(users.createdAt));
+    return db.select({ id: users.id, username: users.username, email: users.email, role: users.role, createdAt: users.createdAt }).from(users).orderBy(desc(users.createdAt));
   }
 
   // ── Leads ──────────────────────────────────────────────────────────────────
@@ -387,6 +389,10 @@ export class DatabaseStorage implements IStorage {
   async getPriceAlerts(userId: number): Promise<PriceAlert[]> {
     return db.select().from(priceAlerts).where(eq(priceAlerts.userId, userId)).orderBy(desc(priceAlerts.createdAt));
   }
+  async getPriceAlertById(id: number): Promise<PriceAlert | undefined> {
+    const [a] = await db.select().from(priceAlerts).where(eq(priceAlerts.id, id));
+    return a;
+  }
   async deletePriceAlert(id: number): Promise<void> {
     await db.delete(priceAlerts).where(eq(priceAlerts.id, id));
   }
@@ -409,6 +415,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(alerts.userId, userId))
       .orderBy(desc(alerts.createdAt))
       .limit(50);
+  }
+  async getAlertById(id: number): Promise<Alert | undefined> {
+    const [a] = await db.select().from(alerts).where(eq(alerts.id, id));
+    return a;
   }
   async markAlertRead(alertId: number) {
     await db.update(alerts).set({ read: true }).where(eq(alerts.id, alertId));

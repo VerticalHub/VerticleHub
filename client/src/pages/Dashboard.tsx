@@ -259,13 +259,13 @@ const alertIcon = (type: string) => {
 export default function Dashboard() {
   const { data: kpiResp, isLoading: kpiLoading } = useQuery<any>({
     queryKey: ["/api/dashboard/kpi"],
-    queryFn: () => fetch("/api/dashboard/kpi?userId=1").then(r => r.json()),
+    queryFn: () => fetch("/api/dashboard/kpi").then(r => r.json()),
     refetchInterval: 30_000,
   });
 
   const { data: dashResp } = useQuery<any>({
     queryKey: ["/api/dashboard"],
-    queryFn: () => fetch("/api/dashboard?userId=1").then(r => r.json()),
+    queryFn: () => fetch("/api/dashboard").then(r => r.json()),
     refetchInterval: 30_000,
   });
 
@@ -277,7 +277,7 @@ export default function Dashboard() {
 
   const { data: alertsResp } = useQuery<any>({
     queryKey: ["/api/alerts"],
-    queryFn: () => fetch("/api/alerts?userId=1").then(r => r.json()),
+    queryFn: () => fetch("/api/alerts").then(r => r.json()),
     refetchInterval: 30_000,
   });
 

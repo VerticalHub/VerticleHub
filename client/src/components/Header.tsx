@@ -75,12 +75,12 @@ export default function Header() {
 
   const { data: alertsResp } = useQuery<any>({
     queryKey: ["/api/alerts/unread"],
-    queryFn: () => fetch("/api/alerts/unread?userId=1").then(r => r.json()),
+    queryFn: () => fetch("/api/alerts/unread").then(r => r.json()),
     refetchInterval: 30_000,
   });
   const { data: allAlertsResp } = useQuery<any>({
     queryKey: ["/api/alerts"],
-    queryFn: () => fetch("/api/alerts?userId=1").then(r => r.json()),
+    queryFn: () => fetch("/api/alerts").then(r => r.json()),
     refetchInterval: 30_000,
     enabled: notifOpen,
   });
@@ -96,7 +96,7 @@ export default function Header() {
     },
   });
   const markAllMutation = useMutation({
-    mutationFn: () => apiRequest("PATCH", "/api/alerts/read-all", { userId: 1 }),
+    mutationFn: () => apiRequest("PATCH", "/api/alerts/read-all", {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/alerts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/alerts/unread"] });

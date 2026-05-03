@@ -14,6 +14,7 @@ import {
 import { ZodError } from "zod";
 import { startAgingJob } from "./jobs/ageLeads";
 import { computeLeadScore, scoreLabel, scoreColor } from "./scoring";
+import { requireAuth, requireRole } from "./middleware/auth";
 
 // ─── Seed ──────────────────────────────────────────────────────────────────────
 async function seedDatabase() {
@@ -211,9 +212,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── Users (admin) ─────────────────────────────────────────────────────────
   // Update display name
-  app.patch("/api/users/:id/display-name", async (req, res) => {
+  app.patch("/api/users/:id/display-name", requireAuth, async (req, res) => {
     try {
+      const sessionUserId = (req.session as any).userId;
+      const sessionRole   = (req.session as any).role ?? "agent";
       const id = parseInt(req.params.id);
+      if (sessionRole !== "admin" && sessionUserId !== id)
+        return res.status(403).json({ success: false, message: "Forbidden" });
       const { displayName } = req.body;
       if (!displayName?.trim()) return res.status(400).json({ success: false, message: "Display name required" });
       const updated = await storage.updateUserDisplayName(id, displayName.trim());
@@ -221,7 +226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (e) { return res.status(500).json({ success: false, message: "Failed to update display name" }); }
   });
 
-  app.get("/api/users", async (_req, res) => {
+  app.get("/api/users", requireAuth, requireRole(["admin"]), async (_req, res) => {
     try {
       const allUsers = await storage.getAllUsers();
       const enriched = await Promise.all(allUsers.map(async u => {
@@ -239,9 +244,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Referrals ─────────────────────────────────────────────────────────────
-  app.get("/api/referrals/my", async (req, res) => {
+  app.get("/api/referrals/my", requireAuth, async (req, res) => {
     try {
-      const userId = (req.session as any)?.userId ?? 1;
+      const userId = (req.session as any).userId;
       const user = await storage.getUser(userId);
       if (!user) return res.status(401).json({ success: false, message: "Not authenticated" });
       // Ensure user has a referral code; generate one if missing
@@ -262,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Admin analytics ───────────────────────────────────────────────────────
-  app.get("/api/admin/revenue", async (_req, res) => {
+  app.get("/api/admin/revenue", requireAuth, requireRole(["admin"]), async (_req, res) => {
     try {
       // Build last-30-day revenue from credit_transactions (spend type = revenue)
       const thirtyDaysAgo = new Date();
@@ -298,7 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get revenue" }); }
   });
 
-  app.get("/api/admin/health", async (_req, res) => {
+  app.get("/api/admin/health", requireAuth, requireRole(["admin"]), async (_req, res) => {
     try {
       const [leads, listings, users, subs] = await Promise.all([
         storage.getAllLeads(),
@@ -330,13 +335,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Lead Stats (MUST be before /:id routes) ───────────────────────────────
-  app.get("/api/leads/stats", async (_req, res) => {
+  app.get("/api/leads/stats", requireAuth, requireRole(["admin"]), async (_req, res) => {
     try {
       return res.json({ success: true, data: await storage.getLeadStats() });
     } catch { return res.status(500).json({ success: false, message: "Failed to get lead stats" }); }
   });
 
-  app.get("/api/leads/search", async (req, res) => {
+  app.get("/api/leads/search", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const { q = "", state, status, dnc, tcpa, industry } = req.query;
       const filters: any = {};
@@ -351,9 +356,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Dashboard summary ─────────────────────────────────────────────────────
-  app.get("/api/dashboard", async (req, res) => {
+  app.get("/api/dashboard", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       const [leadStats, account, listings, recentActivities, followUps, unreadAlerts] = await Promise.all([
         storage.getLeadStats(),
         storage.getCreditAccount(userId),
@@ -381,9 +386,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Dashboard KPI (enriched real-time metrics) ─────────────────────────────
-  app.get("/api/dashboard/kpi", async (req, res) => {
+  app.get("/api/dashboard/kpi", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       const [purchases, listings, leadStats, account] = await Promise.all([
         storage.getLeadPurchasesDetailed(userId),
         storage.getAllLeadListings(),
@@ -484,13 +489,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/leads", async (_req, res) => {
+  app.get("/api/leads", requireAuth, requireRole(["admin"]), async (_req, res) => {
     try {
       return res.json({ success: true, data: await storage.getAllLeads() });
     } catch { return res.status(500).json({ success: false, message: "Failed to get leads" }); }
   });
 
-  app.get("/api/leads/:id", async (req, res) => {
+  app.get("/api/leads/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const lead = await storage.getLeadById(parseInt(req.params.id));
       if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
@@ -498,7 +503,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get lead" }); }
   });
 
-  app.patch("/api/leads/:id", async (req, res) => {
+  app.patch("/api/leads/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { status, notes, tags } = req.body;
@@ -515,21 +520,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to update lead" }); }
   });
 
-  app.get("/api/leads/:id/quality", async (req, res) => {
+  app.get("/api/leads/:id/quality", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       return res.json({ success: true, data: await storage.getLeadQuality(parseInt(req.params.id)) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get quality" }); }
   });
 
-  app.get("/api/leads/:leadId/owned", async (req, res) => {
+  app.get("/api/leads/:leadId/owned", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       const owned = await storage.hasPurchasedLead(userId, parseInt(req.params.leadId));
       return res.json({ success: true, data: { owned } });
     } catch { return res.status(500).json({ success: false, message: "Failed to check ownership" }); }
   });
 
-  app.post("/api/leads/:id/dnc", async (req, res) => {
+  app.post("/api/leads/:id/dnc", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       await storage.markLeadDNC(parseInt(req.params.id));
       await storage.createAlert({ userId: 1, type: "dnc", title: "LEAD DNC'D", body: `Lead #${req.params.id} added to Do Not Call list`, leadId: parseInt(req.params.id), read: false });
@@ -538,7 +543,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bulk DNC
-  app.post("/api/leads/bulk-dnc", async (req, res) => {
+  app.post("/api/leads/bulk-dnc", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const { leadIds } = req.body;
       if (!Array.isArray(leadIds)) return res.status(400).json({ success: false, message: "leadIds must be an array" });
@@ -551,19 +556,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── CRM Activities ────────────────────────────────────────────────────────
-  app.get("/api/leads/:id/activities", async (req, res) => {
+  app.get("/api/leads/:id/activities", requireAuth, async (req, res) => {
     try {
       return res.json({ success: true, data: await storage.getLeadActivities(parseInt(req.params.id)) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get activities" }); }
   });
 
-  app.post("/api/leads/:id/activities", async (req, res) => {
+  app.post("/api/leads/:id/activities", requireAuth, async (req, res) => {
     try {
-      const data = insertLeadActivitySchema.parse({ ...req.body, leadId: parseInt(req.params.id) });
+      const sessionUserId = (req.session as any).userId;
+      const data = insertLeadActivitySchema.parse({ ...req.body, leadId: parseInt(req.params.id), userId: sessionUserId });
       const activity = await storage.createLeadActivity(data);
       if (data.disposition === "converted") {
         await storage.updateLead(parseInt(req.params.id), { status: "converted" });
-        await storage.createAlert({ userId: data.userId, type: "converted", title: "LEAD CONVERTED!", body: `Lead #${req.params.id} marked as converted`, leadId: parseInt(req.params.id), read: false });
+        await storage.createAlert({ userId: sessionUserId, type: "converted", title: "LEAD CONVERTED!", body: `Lead #${req.params.id} marked as converted`, leadId: parseInt(req.params.id), read: false });
       } else if (data.disposition === "contacted") {
         await storage.updateLead(parseInt(req.params.id), { status: "contacted" });
       }
@@ -574,69 +580,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/follow-ups", async (req, res) => {
+  app.get("/api/follow-ups", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       return res.json({ success: true, data: await storage.getFollowUps(userId) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get follow-ups" }); }
   });
 
-  app.get("/api/activities/recent", async (req, res) => {
+  app.get("/api/activities/recent", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       const limit  = parseInt(req.query.limit as string) || 20;
       return res.json({ success: true, data: await storage.getAllRecentActivities(userId, limit) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get activities" }); }
   });
 
   // ── Alerts ────────────────────────────────────────────────────────────────
-  app.get("/api/alerts/unread", async (req, res) => {
+  app.get("/api/alerts/unread", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       return res.json({ success: true, data: await storage.getUnreadAlerts(userId) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get alerts" }); }
   });
 
-  app.get("/api/alerts", async (req, res) => {
+  app.get("/api/alerts", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       return res.json({ success: true, data: await storage.getAllAlerts(userId) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get alerts" }); }
   });
 
-  app.patch("/api/alerts/:id/read", async (req, res) => {
+  app.patch("/api/alerts/:id/read", requireAuth, async (req, res) => {
     try {
-      await storage.markAlertRead(parseInt(req.params.id));
+      const alertId = parseInt(req.params.id);
+      const sessionUserId = (req.session as any).userId;
+      const sessionRole   = (req.session as any).role;
+      const alert = await storage.getAlertById(alertId);
+      if (!alert) return res.status(404).json({ success: false, message: "Alert not found" });
+      if (sessionRole !== "admin" && alert.userId !== sessionUserId)
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      await storage.markAlertRead(alertId);
       return res.json({ success: true });
     } catch { return res.status(500).json({ success: false, message: "Failed to mark alert read" }); }
   });
 
-  app.patch("/api/alerts/read-all", async (req, res) => {
+  app.patch("/api/alerts/read-all", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.body.userId) || 1;
+      const userId = (req.session as any).userId;
       await storage.markAllAlertsRead(userId);
       return res.json({ success: true });
     } catch { return res.status(500).json({ success: false, message: "Failed to mark all read" }); }
   });
 
-  app.delete("/api/alerts/:id", async (req, res) => {
+  app.delete("/api/alerts/:id", requireAuth, async (req, res) => {
     try {
-      await storage.deleteAlert(parseInt(req.params.id));
+      const alertId = parseInt(req.params.id);
+      const sessionUserId = (req.session as any).userId;
+      const sessionRole   = (req.session as any).role;
+      const alert = await storage.getAlertById(alertId);
+      if (!alert) return res.status(404).json({ success: false, message: "Alert not found" });
+      if (sessionRole !== "admin" && alert.userId !== sessionUserId)
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      await storage.deleteAlert(alertId);
       return res.json({ success: true });
     } catch { return res.status(500).json({ success: false, message: "Failed to delete alert" }); }
   });
 
   // ── Watchlist ─────────────────────────────────────────────────────────────
-  app.get("/api/watchlist", async (req, res) => {
+  app.get("/api/watchlist", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       return res.json({ success: true, data: await storage.getWatchlist(userId) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get watchlist" }); }
   });
 
-  app.post("/api/watchlist", async (req, res) => {
+  app.post("/api/watchlist", requireAuth, async (req, res) => {
     try {
-      const { userId = 1, listingId } = req.body;
+      const userId = (req.session as any).userId;
+      const { listingId } = req.body;
       const already = await storage.isWatchlisted(userId, listingId);
       if (already) {
         await storage.removeFromWatchlist(userId, listingId);
@@ -647,33 +668,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to update watchlist" }); }
   });
 
-  app.delete("/api/watchlist/:listingId", async (req, res) => {
+  app.delete("/api/watchlist/:listingId", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       await storage.removeFromWatchlist(userId, parseInt(req.params.listingId));
       return res.json({ success: true });
     } catch { return res.status(500).json({ success: false, message: "Failed to remove from watchlist" }); }
   });
 
-  app.get("/api/watchlist/:listingId/check", async (req, res) => {
+  app.get("/api/watchlist/:listingId/check", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       const watched = await storage.isWatchlisted(userId, parseInt(req.params.listingId));
       return res.json({ success: true, data: { watched } });
     } catch { return res.status(500).json({ success: false, message: "Failed to check watchlist" }); }
   });
 
   // ── Price Alerts ──────────────────────────────────────────────────────────
-  app.get("/api/price-alerts", async (req, res) => {
+  app.get("/api/price-alerts", requireAuth, async (req, res) => {
     try {
-      const userId = parseInt(req.query.userId as string) || 1;
+      const userId = (req.session as any).userId;
       return res.json({ success: true, data: await storage.getPriceAlerts(userId) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get price alerts" }); }
   });
 
-  app.post("/api/price-alerts", async (req, res) => {
+  app.post("/api/price-alerts", requireAuth, async (req, res) => {
     try {
-      const data = insertPriceAlertSchema.parse(req.body);
+      const userId = (req.session as any).userId;
+      const data = insertPriceAlertSchema.parse({ ...req.body, userId });
       const alert = await storage.createPriceAlert(data);
       return res.status(201).json({ success: true, data: alert });
     } catch (error) {
@@ -682,15 +704,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/price-alerts/:id", async (req, res) => {
+  app.delete("/api/price-alerts/:id", requireAuth, async (req, res) => {
     try {
-      await storage.deletePriceAlert(parseInt(req.params.id));
+      const alertId = parseInt(req.params.id);
+      const sessionUserId = (req.session as any).userId;
+      const sessionRole   = (req.session as any).role;
+      const priceAlert = await storage.getPriceAlertById(alertId);
+      if (!priceAlert) return res.status(404).json({ success: false, message: "Price alert not found" });
+      if (sessionRole !== "admin" && priceAlert.userId !== sessionUserId)
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      await storage.deletePriceAlert(alertId);
       return res.json({ success: true });
     } catch { return res.status(500).json({ success: false, message: "Failed to delete price alert" }); }
   });
 
   // ── CSV Export ────────────────────────────────────────────────────────────
-  app.get("/api/export/leads", async (req, res) => {
+  app.get("/api/export/leads", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const { state, status } = req.query;
       let allLeads = await storage.getAllLeads();
@@ -711,7 +740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Export failed" }); }
   });
 
-  app.get("/api/export/listings", async (req, res) => {
+  app.get("/api/export/listings", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const listings = await storage.getAllLeadListings();
       const headers = ["ID","Lead ID","Industry","State","Price","Quality","Times Resold","Featured","Active","Listed"];
@@ -726,9 +755,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Credits ───────────────────────────────────────────────────────────────
-  app.get("/api/credits/:userId", async (req, res) => {
+  app.get("/api/credits/:userId", requireAuth, async (req, res) => {
     try {
+      const sessionUserId = (req.session as any).userId;
+      const sessionRole   = (req.session as any).role ?? "agent";
       const userId = parseInt(req.params.userId);
+      if (sessionRole !== "admin" && sessionUserId !== userId)
+        return res.status(403).json({ success: false, message: "Forbidden" });
       let account = await storage.getCreditAccount(userId);
       if (!account) account = await storage.createCreditAccount({ userId, balance: "0.00", totalPurchased: "0.00" });
       return res.json({ success: true, data: account });
@@ -741,9 +774,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get packages" }); }
   });
 
-  app.post("/api/credits/purchase", async (req, res) => {
+  app.post("/api/credits/purchase", requireAuth, async (req, res) => {
     try {
-      const { userId, packageId, amount } = req.body;
+      const userId = (req.session as any).userId;
+      const { packageId, amount } = req.body;
       await storage.updateCreditBalance(userId, amount);
       await storage.addCreditTransaction({ userId, type: "purchase", amount, description: `Deposit — Package #${packageId}` });
       await storage.createAlert({ userId, type: "purchase", title: "FUNDS DEPOSITED", body: `$${amount} added to your account`, leadId: null, read: false });
@@ -751,14 +785,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to deposit credits" }); }
   });
 
-  app.get("/api/credits/:userId/transactions", async (req, res) => {
+  app.get("/api/credits/:userId/transactions", requireAuth, async (req, res) => {
     try {
-      return res.json({ success: true, data: await storage.getCreditTransactions(parseInt(req.params.userId)) });
+      const sessionUserId = (req.session as any).userId;
+      const sessionRole   = (req.session as any).role ?? "agent";
+      const userId = parseInt(req.params.userId);
+      if (sessionRole !== "admin" && sessionUserId !== userId)
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      return res.json({ success: true, data: await storage.getCreditTransactions(userId) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get transactions" }); }
   });
 
   // ── AI Scoring ────────────────────────────────────────────────────────────
-  app.post("/api/leads/rescore-all", async (_req, res) => {
+  app.post("/api/leads/rescore-all", requireAuth, requireRole(["admin"]), async (_req, res) => {
     try {
       const count = await storage.rescoreAllLeads();
       return res.json({ success: true, message: `Rescored ${count} leads`, count });
@@ -768,7 +807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/leads/:id/score-breakdown", async (req, res) => {
+  app.get("/api/leads/:id/score-breakdown", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const lead = await storage.getLeadById(parseInt(req.params.id));
       if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
@@ -794,13 +833,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get listings" }); }
   });
 
-  app.get("/api/lead-listings/all", async (_req, res) => {
+  app.get("/api/lead-listings/all", requireAuth, requireRole(["admin"]), async (_req, res) => {
     try {
       return res.json({ success: true, data: await storage.getAllLeadListingsEnriched() });
     } catch { return res.status(500).json({ success: false, message: "Failed to get all listings" }); }
   });
 
-  app.post("/api/lead-listings", async (req, res) => {
+  app.post("/api/lead-listings", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const data = insertLeadListingSchema.parse(req.body);
       const listing = await storage.createLeadListing(data);
@@ -811,10 +850,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/lead-listings/:id/purchase", async (req, res) => {
+  app.post("/api/lead-listings/:id/purchase", requireAuth, async (req, res) => {
     try {
       const listingId = parseInt(req.params.id);
-      const { buyerId } = req.body;
+      const buyerId = (req.session as any).userId;
       const listing = await storage.getLeadListingById(listingId);
       if (!listing?.isActive) return res.status(404).json({ success: false, message: "Listing not available" });
       const lead = await storage.getLeadById(listing.leadId);
@@ -837,9 +876,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Bulk Purchase ──────────────────────────────────────────────────────────
-  app.post("/api/lead-listings/bulk-purchase", async (req, res) => {
+  app.post("/api/lead-listings/bulk-purchase", requireAuth, async (req, res) => {
     try {
-      const { listingIds, buyerId } = req.body;
+      const { listingIds } = req.body;
+      const buyerId = (req.session as any).userId;
       if (!Array.isArray(listingIds) || !listingIds.length)
         return res.status(400).json({ success: false, message: "No listings selected" });
 
@@ -878,15 +918,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Purchases ─────────────────────────────────────────────────────────────
-  app.get("/api/purchases/:userId", async (req, res) => {
+  app.get("/api/purchases/:userId", requireAuth, async (req, res) => {
     try {
-      return res.json({ success: true, data: await storage.getLeadPurchases(parseInt(req.params.userId)) });
+      const sessionUserId = (req.session as any).userId;
+      const sessionRole   = (req.session as any).role ?? "agent";
+      const userId = parseInt(req.params.userId);
+      if (sessionRole !== "admin" && sessionUserId !== userId)
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      return res.json({ success: true, data: await storage.getLeadPurchases(userId) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get purchases" }); }
   });
 
-  app.get("/api/purchases/:userId/detailed", async (req, res) => {
+  app.get("/api/purchases/:userId/detailed", requireAuth, async (req, res) => {
     try {
-      return res.json({ success: true, data: await storage.getLeadPurchasesDetailed(parseInt(req.params.userId)) });
+      const sessionUserId = (req.session as any).userId;
+      const sessionRole   = (req.session as any).role ?? "agent";
+      const userId = parseInt(req.params.userId);
+      if (sessionRole !== "admin" && sessionUserId !== userId)
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      return res.json({ success: true, data: await storage.getLeadPurchasesDetailed(userId) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get detailed purchases" }); }
   });
 
@@ -898,7 +948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get predictions" }); }
   });
 
-  app.post("/api/demand-predictions/generate", async (req, res) => {
+  app.post("/api/demand-predictions/generate", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const { industry, geography } = req.body;
       const prediction = await storage.saveDemandPrediction({
@@ -986,7 +1036,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get trends" }); }
   });
 
-  app.post("/api/market-trends", async (req, res) => {
+  app.post("/api/market-trends", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const data = insertMarketTrendSchema.parse(req.body);
       const trend = await storage.saveMarketTrend(data);
@@ -998,22 +1048,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Seller Submissions ─────────────────────────────────────────────────────
-  app.post("/api/submissions", async (req, res) => {
+  app.post("/api/submissions", requireAuth, async (req, res) => {
     try {
-      const sub = await storage.createSubmission(req.body);
+      const sessionUserId = (req.session as any).userId;
+      const sub = await storage.createSubmission({ ...req.body, submittedBy: sessionUserId });
       return res.status(201).json({ success: true, data: sub });
     } catch { return res.status(500).json({ success: false, message: "Failed to create submission" }); }
   });
 
-  app.get("/api/submissions", async (req, res) => {
+  app.get("/api/submissions", requireAuth, async (req, res) => {
     try {
-      const userId = req.query.userId ? parseInt(req.query.userId as string) : null;
-      const data = userId ? await storage.getSubmissionsByUser(userId) : await storage.getAllSubmissions();
+      const sessionUserId = (req.session as any).userId;
+      const sessionRole   = (req.session as any).role ?? "agent";
+      let data;
+      if (sessionRole === "admin") {
+        const queryUserId = req.query.userId ? parseInt(req.query.userId as string) : null;
+        data = queryUserId ? await storage.getSubmissionsByUser(queryUserId) : await storage.getAllSubmissions();
+      } else {
+        data = await storage.getSubmissionsByUser(sessionUserId);
+      }
       return res.json({ success: true, data });
     } catch { return res.status(500).json({ success: false, message: "Failed to get submissions" }); }
   });
 
-  app.patch("/api/submissions/:id/review", async (req, res) => {
+  app.patch("/api/submissions/:id/review", requireAuth, requireRole(["admin"]), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { status, adminNotes } = req.body;

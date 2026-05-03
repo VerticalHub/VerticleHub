@@ -258,6 +258,13 @@ export default function Marketplace() {
   const queryClient = useQueryClient();
 
   // ── Queries ────────────────────────────────────────────────────────────────
+  const { data: meResp } = useQuery<any>({
+    queryKey: ["/api/auth/me"],
+    queryFn: () => fetch("/api/auth/me").then(r => r.json()),
+    staleTime: 60_000,
+  });
+  const myId = meResp?.data?.id;
+
   const { data: listingsResp, isLoading } = useQuery<any>({
     queryKey: ["/api/lead-listings"],
     queryFn: () => fetch("/api/lead-listings").then(r => r.json()),
@@ -265,14 +272,16 @@ export default function Marketplace() {
   });
 
   const { data: creditsResp } = useQuery<any>({
-    queryKey: ["/api/credits/1"],
-    queryFn: () => fetch("/api/credits/1").then(r => r.json()),
+    queryKey: ["/api/credits", myId],
+    queryFn: () => fetch(`/api/credits/${myId}`).then(r => r.json()),
+    enabled: !!myId,
     refetchInterval: 30_000,
   });
 
   const { data: purchasesResp } = useQuery<any>({
-    queryKey: ["/api/purchases/1/detailed"],
-    queryFn: () => fetch("/api/purchases/1/detailed").then(r => r.json()),
+    queryKey: ["/api/purchases", myId, "detailed"],
+    queryFn: () => fetch(`/api/purchases/${myId}/detailed`).then(r => r.json()),
+    enabled: !!myId,
   });
 
   const { data: predsResp } = useQuery<any>({
@@ -289,13 +298,13 @@ export default function Marketplace() {
 
   const { data: watchlistResp } = useQuery<any>({
     queryKey: ["/api/watchlist"],
-    queryFn: () => fetch("/api/watchlist?userId=1").then(r => r.json()),
+    queryFn: () => fetch("/api/watchlist").then(r => r.json()),
     refetchInterval: 30_000,
   });
 
   const { data: priceAlertsResp } = useQuery<any>({
     queryKey: ["/api/price-alerts"],
-    queryFn: () => fetch("/api/price-alerts?userId=1").then(r => r.json()),
+    queryFn: () => fetch("/api/price-alerts").then(r => r.json()),
   });
 
   const { data: packagesResp } = useQuery<any>({
@@ -385,12 +394,12 @@ export default function Marketplace() {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const purchaseMutation = useMutation({
-    mutationFn: ({ listingId, buyerId }: any) =>
-      apiRequest("POST", `/api/lead-listings/${listingId}/purchase`, { buyerId }),
+    mutationFn: ({ listingId }: any) =>
+      apiRequest("POST", `/api/lead-listings/${listingId}/purchase`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-listings"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/credits/1"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/purchases/1/detailed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/credits", myId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchases", myId, "detailed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/alerts/unread"] });
       setConfirm(null);
       toast({ title: "Lead acquired", description: "Lead added to your portfolio.", variant: "success" as any });
@@ -402,7 +411,7 @@ export default function Marketplace() {
 
   const watchlistMutation = useMutation({
     mutationFn: ({ listingId }: { listingId: number }) =>
-      apiRequest("POST", "/api/watchlist", { userId: 1, listingId }),
+      apiRequest("POST", "/api/watchlist", { listingId }),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["/api/watchlist"] });
       const now = watchlistIds.has(vars.listingId);
@@ -427,20 +436,20 @@ export default function Marketplace() {
 
   const depositMutation = useMutation({
     mutationFn: ({ packageId, amount }: any) =>
-      apiRequest("POST", "/api/credits/purchase", { userId: 1, packageId, amount }),
+      apiRequest("POST", "/api/credits/purchase", { packageId, amount }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/credits/1"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/credits", myId] });
       toast({ title: "Credits deposited", description: "Your account balance has been updated.", variant: "success" as any });
     },
   });
 
   const bulkPurchaseMutation = useMutation({
     mutationFn: (listingIds: number[]) =>
-      apiRequest("POST", "/api/lead-listings/bulk-purchase", { listingIds, buyerId: 1 }),
+      apiRequest("POST", "/api/lead-listings/bulk-purchase", { listingIds }),
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-listings"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/credits/1"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/purchases/1/detailed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/credits", myId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchases", myId, "detailed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/alerts/unread"] });
       const { purchased, errors } = res?.data || { purchased: [], errors: [] };
       clearSelection();
@@ -494,7 +503,7 @@ export default function Marketplace() {
         <PurchaseConfirmModal
           listing={confirmListing}
           balance={credits}
-          onConfirm={() => purchaseMutation.mutate({ listingId: confirmListing.id, buyerId: 1 })}
+          onConfirm={() => purchaseMutation.mutate({ listingId: confirmListing.id })}
           onCancel={() => setConfirm(null)}
           isPending={purchaseMutation.isPending}
         />
@@ -1055,7 +1064,7 @@ export default function Marketplace() {
                         className="w-full bg-[#0a1120] border border-[#1e2d4a] text-[#94b4d4] text-[11px] font-mono px-2 py-2 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#2a4060]" />
                     </div>
                   </div>
-                  <button onClick={() => createAlertMutation.mutate({ userId: 1, ...alertForm, triggered: false })}
+                  <button onClick={() => createAlertMutation.mutate({ ...alertForm, triggered: false })}
                     disabled={createAlertMutation.isPending || !alertForm.targetPrice}
                     className="mt-3 px-4 py-2 bg-[#0d1e3a] border border-[#2563eb] text-[#38bdf8] text-[10px] font-mono rounded-sm hover:bg-[#1a3a6b] transition-colors disabled:opacity-40">
                     {createAlertMutation.isPending ? "CREATING..." : "CREATE ALERT →"}

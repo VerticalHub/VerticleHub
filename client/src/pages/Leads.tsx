@@ -58,7 +58,7 @@ export default function Leads() {
 
   const { data: activitiesResp } = useQuery<any>({
     queryKey: ["/api/activities/recent"],
-    queryFn: () => fetch("/api/activities/recent?userId=1&limit=20").then(r => r.json()),
+    queryFn: () => fetch("/api/activities/recent?limit=20").then(r => r.json()),
     refetchInterval: 30_000,
     enabled: tab === "crm",
   });
@@ -66,7 +66,7 @@ export default function Leads() {
 
   const { data: followUpsResp } = useQuery<any>({
     queryKey: ["/api/follow-ups"],
-    queryFn: () => fetch("/api/follow-ups?userId=1").then(r => r.json()),
+    queryFn: () => fetch("/api/follow-ups").then(r => r.json()),
     enabled: tab === "crm",
   });
   const followUps: any[] = followUpsResp?.data || [];
