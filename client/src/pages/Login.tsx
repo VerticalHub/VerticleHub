@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { Activity, Lock, User, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Activity, Lock, User, Eye, EyeOff, AlertCircle, Gift } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Login() {
@@ -11,22 +11,30 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [tab, setTab] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
+  const [refCode, setRefCode] = useState("");
   const [error, setError] = useState("");
+
+  // Pick up ?ref= from URL on load
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) { setRefCode(ref); setTab("register"); }
+  }, []);
 
   const loginMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/login", { username, password }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      setLocation("/leads");
+      setLocation("/dashboard");
     },
     onError: (err: any) => setError(err.message || "Invalid credentials"),
   });
 
   const registerMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/auth/register", { username, password, email }),
+    mutationFn: () => apiRequest("POST", "/api/auth/register", { username, password, email, refCode: refCode || undefined }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      setLocation("/leads");
+      setLocation("/dashboard");
     },
     onError: (err: any) => setError(err.message || "Registration failed"),
   });
@@ -57,6 +65,17 @@ export default function Login() {
           <span className="text-[18px] font-bold font-mono text-[#0ea5e9] tracking-tight">PRO</span>
         </div>
       </div>
+
+      {/* Referral banner */}
+      {refCode && tab === "register" && (
+        <div className="w-full max-w-sm mb-4 flex items-center gap-3 bg-[#0a1a0d] border border-[#00d08440] rounded-sm px-4 py-3">
+          <Gift className="w-4 h-4 text-[#00d084] flex-shrink-0" />
+          <div>
+            <p className="text-[10px] font-mono font-bold text-[#00d084]">YOU WERE REFERRED!</p>
+            <p className="text-[9px] font-mono text-[#3a5070] mt-0.5">Sign up now — your referrer earns $25 in credits</p>
+          </div>
+        </div>
+      )}
 
       {/* Card */}
       <div className="w-full max-w-sm bg-[#0d1526] border border-[#1e2d4a] rounded-sm shadow-2xl">
@@ -111,6 +130,25 @@ export default function Login() {
               </button>
             </div>
           </div>
+
+          {tab === "register" && (
+            <div>
+              <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">
+                REFERRAL CODE <span className="text-[#3a5070]">(OPTIONAL — EARN YOUR REFERRER $25)</span>
+              </label>
+              <div className="relative">
+                <Gift className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#2a4060]" />
+                <input
+                  type="text" value={refCode} onChange={e => setRefCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. ADMIN123"
+                  className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono pl-9 pr-3 py-2.5 rounded-sm focus:outline-none focus:border-[#a78bfa] placeholder-[#1e2d4a] tracking-widest"
+                />
+              </div>
+              {refCode && (
+                <p className="text-[9px] font-mono text-[#00d084] mt-1">✓ Referral code will be applied on signup</p>
+              )}
+            </div>
+          )}
 
           {error && (
             <div className="flex items-center gap-2 bg-[#1a0808] border border-[#ff4d4d40] rounded-sm px-3 py-2">

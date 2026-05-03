@@ -9,6 +9,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   email: text("email").unique(),
   role: text("role").notNull().default("agent"), // agent | manager | admin
+  referralCode: text("referral_code").unique(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -260,6 +261,21 @@ export const insertLeadSubmissionSchema = createInsertSchema(leadSubmissions).om
 export type InsertLeadSubmission = z.infer<typeof insertLeadSubmissionSchema>;
 export type LeadSubmission = typeof leadSubmissions.$inferSelect;
 
+// ── Referrals ───────────────────────────────────────────────────────────────────
+export const referrals = pgTable("referrals", {
+  id:            serial("id").primaryKey(),
+  referrerId:    integer("referrer_id").notNull(),   // user who shared the code
+  refereeId:     integer("referee_id").notNull(),    // new user who used the code
+  code:          text("code").notNull(),             // referral code used
+  creditAwarded: decimal("credit_awarded", { precision: 10, scale: 2 }).notNull().default("25.00"),
+  status:        text("status").notNull().default("completed"), // completed | pending
+  createdAt:     timestamp("created_at").defaultNow(),
+});
+
+export const insertReferralSchema = createInsertSchema(referrals).omit({ id: true, createdAt: true });
+export type InsertReferral = z.infer<typeof insertReferralSchema>;
+export type Referral = typeof referrals.$inferSelect;
+
 // ── Schema exports ─────────────────────────────────────────────────────────────
 export const insertCreditAccountSchema   = createInsertSchema(creditAccounts).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCreditTransactionSchema = createInsertSchema(creditTransactions).omit({ id: true, createdAt: true });
@@ -291,3 +307,4 @@ export type Watchlist              = typeof watchlist.$inferSelect;
 export type InsertWatchlist        = z.infer<typeof insertWatchlistSchema>;
 export type PriceAlert             = typeof priceAlerts.$inferSelect;
 export type InsertPriceAlert       = z.infer<typeof insertPriceAlertSchema>;
+export type InsertReferralSchema   = typeof insertReferralSchema;

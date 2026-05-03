@@ -168,12 +168,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { username, password, email, role } = req.body;
+      const { username, password, email, role, refCode } = req.body;
       if (!username || !password) return res.status(400).json({ success: false, message: "Username and password required" });
       const existing = await storage.getUserByUsername(username);
       if (existing) return res.status(409).json({ success: false, message: "Username already taken" });
       const hash = await bcrypt.hash(password, 10);
-      const user = await storage.createUser({ username, password: hash, email: email || null, role: role || "agent" });
+      // Generate a unique referral code for this new user
+      const newCode = username.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) + Math.random().toString(36).slice(2, 5).toUpperCase();
+      const user = await storage.createUser({ username, password: hash, email: email || null, role: role || "agent", referralCode: newCode });
+      // Credit the referrer $25 if a valid referral code was provided
+      if (refCode) {
+        const referrer = await storage.getUserByReferralCode(refCode);
+        if (referrer && referrer.id !== user.id) {
+          await storage.createReferral({ referrerId: referrer.id, refereeId: user.id, code: refCode, creditAwarded: "25.00", status: "completed" });
+          // Credit $25 to the referrer's account
+          let account = await storage.getCreditAccount(referrer.id);
+          if (!account) account = await storage.createCreditAccount({ userId: referrer.id, balance: "0.00", totalPurchased: "0.00" });
+          await storage.updateCreditBalance(referrer.id, "25.00");
+          await storage.addCreditTransaction({ userId: referrer.id, type: "purchase", amount: "25.00", description: `Referral bonus — ${username} signed up with your code` });
+          await storage.createAlert({ userId: referrer.id, type: "purchase", title: "REFERRAL BONUS EARNED", body: `${username} registered using your referral code. $25.00 added to your account!`, leadId: null, read: false });
+        }
+      }
       (req.session as any).userId = user.id;
       (req.session as any).role   = user.role;
       return res.status(201).json({ success: true, data: { id: user.id, username: user.username, role: user.role } });
@@ -210,6 +225,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }));
       return res.json({ success: true, data: enriched });
     } catch { return res.status(500).json({ success: false, message: "Failed to get users" }); }
+  });
+
+  // ── Referrals ─────────────────────────────────────────────────────────────
+  app.get("/api/referrals/my", async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId ?? 1;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ success: false, message: "Not authenticated" });
+      // Ensure user has a referral code; generate one if missing
+      let code = user.referralCode;
+      if (!code) {
+        code = user.username.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) + Math.random().toString(36).slice(2, 5).toUpperCase();
+        await storage.setReferralCode(userId, code);
+      }
+      const refs = await storage.getReferralsByReferrer(userId);
+      // Enrich with referee usernames
+      const enriched = await Promise.all(refs.map(async r => {
+        const referee = await storage.getUser(r.refereeId).catch(() => null);
+        return { ...r, refereeName: referee?.username ?? null };
+      }));
+      const totalEarned = refs.reduce((s, r) => s + parseFloat(r.creditAwarded as string), 0);
+      return res.json({ success: true, data: { code, referrals: enriched, totalEarned: +totalEarned.toFixed(2) } });
+    } catch (e) { return res.status(500).json({ success: false, message: "Failed to get referrals" }); }
   });
 
   // ── Admin analytics ───────────────────────────────────────────────────────

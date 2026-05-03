@@ -1,7 +1,7 @@
 import { 
   users, leads, creditAccounts, creditTransactions, creditPackages,
   leadListings, leadPurchases, leadQualityDecay, demandPredictions, marketTrends,
-  alerts, leadActivities, watchlist, priceAlerts, leadSubmissions,
+  alerts, leadActivities, watchlist, priceAlerts, leadSubmissions, referrals,
   type User, type InsertUser, type Lead, type InsertLead,
   type CreditAccount, type InsertCreditAccount, type CreditTransaction, type InsertCreditTransaction,
   type CreditPackage, type InsertCreditPackage, type LeadListing, type InsertLeadListing,
@@ -10,6 +10,7 @@ import {
   type Alert, type InsertAlert, type LeadActivity, type InsertLeadActivity,
   type Watchlist, type InsertWatchlist, type PriceAlert, type InsertPriceAlert,
   type LeadSubmission, type InsertLeadSubmission,
+  type Referral, type InsertReferral,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, or, ilike, ne } from "drizzle-orm";
@@ -115,6 +116,13 @@ export interface IStorage {
   getLatestDemandPrediction(industry: string, geography: string): Promise<DemandPrediction | undefined>;
   saveMarketTrend(trend: InsertMarketTrend): Promise<MarketTrend>;
   getMarketTrends(industry?: string, geography?: string, days?: number): Promise<MarketTrend[]>;
+
+  // Referrals
+  getUserByReferralCode(code: string): Promise<User | undefined>;
+  setReferralCode(userId: number, code: string): Promise<void>;
+  createReferral(ref: InsertReferral): Promise<Referral>;
+  getReferralsByReferrer(referrerId: number): Promise<Referral[]>;
+  getReferralCount(referrerId: number): Promise<number>;
 
   // Seller Submissions
   createSubmission(sub: InsertLeadSubmission): Promise<LeadSubmission>;
@@ -512,6 +520,28 @@ export class DatabaseStorage implements IStorage {
   async getAllLeadListingsEnriched() {
     const raw = await this.getAllLeadListings();
     return this._enrichListings(raw);
+  }
+
+  // ── Referrals ─────────────────────────────────────────────────────────────
+  async getUserByReferralCode(code: string): Promise<User | undefined> {
+    const [row] = await db.select().from(users).where(eq(users.referralCode, code));
+    return row;
+  }
+  async setReferralCode(userId: number, code: string): Promise<void> {
+    await db.update(users).set({ referralCode: code }).where(eq(users.id, userId));
+  }
+  async createReferral(ref: InsertReferral): Promise<Referral> {
+    const [row] = await db.insert(referrals).values(ref).returning();
+    return row;
+  }
+  async getReferralsByReferrer(referrerId: number): Promise<Referral[]> {
+    return db.select().from(referrals)
+      .where(eq(referrals.referrerId, referrerId))
+      .orderBy(desc(referrals.createdAt));
+  }
+  async getReferralCount(referrerId: number): Promise<number> {
+    const rows = await db.select().from(referrals).where(eq(referrals.referrerId, referrerId));
+    return rows.length;
   }
 
   // ── Seller Submissions ────────────────────────────────────────────────────
