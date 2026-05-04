@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { db } from "./db";
-import { creditTransactions } from "@shared/schema";
+import { creditTransactions, type Lead, type LeadListing } from "@shared/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { 
   leadValidationSchema, insertCreditAccountSchema,
@@ -833,11 +833,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Lead Listings ─────────────────────────────────────────────────────────
-  app.get("/api/lead-listings", async (req, res) => {
+  type PublicLeadData = Pick<Lead, "leadScore" | "agingScore" | "interestedInACA" | "interestedInMedicare" | "interestedInFinalExpense" | "state">;
+  type EnrichedListing = LeadListing & { leadData: PublicLeadData | null };
+
+  function sanitizeListing(enriched: EnrichedListing): LeadListing & { leadData: PublicLeadData | null } {
+    const { leadData, ...listing } = enriched;
+    if (!leadData) return { ...listing, leadData: null };
+    return {
+      ...listing,
+      leadData: {
+        leadScore: leadData.leadScore,
+        agingScore: leadData.agingScore,
+        interestedInACA: leadData.interestedInACA,
+        interestedInMedicare: leadData.interestedInMedicare,
+        interestedInFinalExpense: leadData.interestedInFinalExpense,
+        state: leadData.state,
+      },
+    };
+  }
+
+  app.get("/api/lead-listings", requireAuth, async (req, res) => {
     try {
       const { industry, geography, minPrice, maxPrice } = req.query;
       const listings = await storage.getLeadListingsEnriched({ industry: industry as string, geography: geography as string, minPrice: minPrice as string, maxPrice: maxPrice as string });
-      return res.json({ success: true, data: listings });
+      return res.json({ success: true, data: (listings as EnrichedListing[]).map(sanitizeListing) });
     } catch { return res.status(500).json({ success: false, message: "Failed to get listings" }); }
   });
 
