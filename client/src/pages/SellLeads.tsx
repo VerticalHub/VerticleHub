@@ -58,11 +58,14 @@ export default function SellLeads() {
 
   const submitMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/submissions", data),
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions/mine"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/listings"] });
       setSubmitted(true);
       setForm(empty);
-      toast({ title: "Lead submitted!", description: "Your lead is in the admin review queue. You'll be notified when it goes live.", variant: "success" as any });
+      const score = res?.data?.leadScore;
+      const tier = score >= 80 ? "PRIME" : score >= 60 ? "GOOD" : score >= 40 ? "FAIR" : score != null ? "LOW" : null;
+      toast({ title: "Lead listed instantly!", description: tier ? `Your lead scored ${score}/100 (${tier}) and is now live on the marketplace.` : "Your lead is now live on the marketplace.", variant: "success" as any });
     },
     onError: () => toast({ title: "Submission failed", description: "Please check your details and try again.", variant: "destructive" }),
   });
@@ -111,11 +114,11 @@ export default function SellLeads() {
               <Upload className="w-4 h-4 text-[#00d084]" />
               <h1 className="text-[16px] font-mono font-bold text-[#c8daf0] tracking-wide">SELL LEADS</h1>
             </div>
-            <p className="text-[10px] font-mono text-[#3a5070]">Submit a lead to the marketplace. Our team reviews and approves within 24 hours.</p>
+            <p className="text-[10px] font-mono text-[#3a5070]">Submit a lead and it goes live on the marketplace instantly — AI-scored and priced.</p>
           </div>
           <div className="text-right">
             <div className="text-[22px] font-mono font-bold text-[#00d084] num">{mySubs.filter((s:any) => s.status==="approved").length}</div>
-            <div className="text-[9px] font-mono text-[#3a5070]">LEADS APPROVED</div>
+            <div className="text-[9px] font-mono text-[#3a5070]">LEADS LISTED</div>
           </div>
         </div>
 
@@ -124,10 +127,10 @@ export default function SellLeads() {
           <div className="flex items-center gap-3 p-4 bg-[#001a0d] border border-[#00d08440] rounded-sm fade-in">
             <CheckCircle2 className="w-5 h-5 text-[#00d084] flex-shrink-0" />
             <div>
-              <p className="text-[12px] font-mono font-bold text-[#00d084]">SUBMISSION RECEIVED</p>
-              <p className="text-[10px] font-mono text-[#4a6080] mt-0.5">Your lead has been submitted for admin review. You'll see its status in the table below.</p>
+              <p className="text-[12px] font-mono font-bold text-[#00d084]">LEAD NOW LIVE</p>
+              <p className="text-[10px] font-mono text-[#4a6080] mt-0.5">Your lead has been AI-scored and is active on the marketplace. Buyers can purchase it immediately.</p>
             </div>
-            <button onClick={() => setSubmitted(false)} className="ml-auto text-[#2a4060] hover:text-[#00d084] text-[10px] font-mono">SUBMIT ANOTHER</button>
+            <button onClick={() => setSubmitted(false)} className="ml-auto text-[#2a4060] hover:text-[#00d084] text-[10px] font-mono">LIST ANOTHER</button>
           </div>
         )}
 
@@ -227,7 +230,7 @@ export default function SellLeads() {
                   </div>
                   <div>
                     <span className="text-[11px] font-mono text-[#c8daf0]">TCPA Consent Obtained</span>
-                    <span className="text-[9px] font-mono text-[#3a5070] ml-2">Lead has consented to be contacted (+25 AI score pts)</span>
+                    <span className="text-[9px] font-mono text-[#3a5070] ml-2">Seller certifies written consent was obtained and documented</span>
                   </div>
                 </label>
               </div>
@@ -285,8 +288,8 @@ export default function SellLeads() {
             <button onClick={handleSubmit} disabled={submitMutation.isPending}
               className="w-full flex items-center justify-center gap-2 py-3 bg-[#0d1e3a] border border-[#2563eb] text-[#38bdf8] text-[11px] font-mono font-bold rounded-sm hover:bg-[#1a3a6b] transition-colors disabled:opacity-50">
               {submitMutation.isPending
-                ? <><div className="w-4 h-4 border border-[#38bdf8] border-t-transparent rounded-full animate-spin" /> SUBMITTING...</>
-                : <><Upload className="w-4 h-4" /> SUBMIT LEAD FOR REVIEW</>
+                ? <><div className="w-4 h-4 border border-[#38bdf8] border-t-transparent rounded-full animate-spin" /> LISTING...</>
+                : <><Upload className="w-4 h-4" /> LIST LEAD INSTANTLY</>
               }
             </button>
           </div>
@@ -298,10 +301,10 @@ export default function SellLeads() {
               <p className="text-[10px] font-mono tracking-widest text-[#4a6080] mb-4">HOW IT WORKS</p>
               <div className="space-y-4">
                 {[
-                  { n: "1", label: "SUBMIT",   desc: "Fill out the lead form with all available details" },
-                  { n: "2", label: "REVIEW",   desc: "Our team verifies and AI-scores the lead (24h)" },
-                  { n: "3", label: "LISTING",  desc: "Approved leads go live in the marketplace" },
-                  { n: "4", label: "EARNINGS", desc: "Earn your asking price when a buyer purchases" },
+                  { n: "1", label: "SUBMIT",   desc: "Fill out the lead form with all available contact details" },
+                  { n: "2", label: "AI SCORE", desc: "Lead is instantly scored 0–100 across 7 quality factors" },
+                  { n: "3", label: "LIVE NOW", desc: "Your listing goes active on the marketplace immediately" },
+                  { n: "4", label: "EARNINGS", desc: "Credits are deposited the moment a buyer purchases" },
                 ].map(step => (
                   <div key={step.n} className="flex items-start gap-3">
                     <div className="w-5 h-5 rounded-full bg-[#0a1628] border border-[#2563eb] flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -339,7 +342,7 @@ export default function SellLeads() {
             <div className="flex items-start gap-2 p-3 bg-[#0d1e0d] border border-[#00d08430] rounded-sm">
               <AlertTriangle className="w-3.5 h-3.5 text-[#00d084] flex-shrink-0 mt-0.5" />
               <p className="text-[9px] font-mono text-[#4a8060]">
-                Leads with TCPA consent receive significantly higher AI scores and sell faster. Always confirm consent documentation is available.
+                Only check TCPA consent if you have the signed consent record on file. Misrepresenting consent status may violate federal law.
               </p>
             </div>
           </div>

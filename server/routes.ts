@@ -1059,8 +1059,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/submissions", requireAuth, async (req, res) => {
     try {
       const sessionUserId = (req.session as any).userId;
-      const sub = await storage.createSubmission({ ...req.body, submittedBy: sessionUserId });
-      return res.status(201).json({ success: true, data: sub });
+      // Auto-approve: create submission, score it, and list it immediately
+      const sub = await storage.createSubmission({ ...req.body, submittedBy: sessionUserId, status: "approved" });
+      const lead = await storage.createLead({
+        firstName: sub.firstName, lastName: sub.lastName,
+        email: sub.email, phoneNumber: sub.phoneNumber,
+        zipCode: sub.zipCode, state: sub.state,
+        dateOfBirth: sub.dateOfBirth ?? undefined,
+        interestedInACA: sub.interestedInACA ?? false,
+        interestedInMedicare: sub.interestedInMedicare ?? false,
+        interestedInFinalExpense: sub.interestedInFinalExpense ?? false,
+        tcpaConsent: sub.tcpaConsent ?? false,
+        annualIncome: sub.annualIncome ?? undefined,
+        householdSize: sub.householdSize ?? undefined,
+        source: "seller_portal",
+        status: "new",
+      });
+      const score = computeLeadScore(lead as any);
+      await storage.updateLead(lead.id, { leadScore: score.total });
+      await storage.createLeadListing({
+        leadId: lead.id,
+        sellerId: sessionUserId,
+        price: sub.askingPrice,
+        industry: sub.industry,
+        geography: lead.state,
+        qualityScore: score.total,
+        isActive: true,
+        featured: false,
+      });
+      await storage.updateSubmissionStatus(sub.id, "approved", "Auto-approved", sessionUserId);
+      return res.status(201).json({ success: true, data: { ...sub, status: "approved", leadScore: score.total } });
     } catch { return res.status(500).json({ success: false, message: "Failed to create submission" }); }
   });
 
