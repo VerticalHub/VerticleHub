@@ -21,7 +21,7 @@ const empty = {
 function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <div>
-      <label className="block text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">
+      <label className="block text-[9px] font-mono tracking-widest text-[#7a9abf] mb-1.5">
         {label}{required && <span className="text-[#ff4d4d] ml-0.5">*</span>}
       </label>
       {children}
@@ -29,7 +29,7 @@ function Field({ label, children, required }: { label: string; children: React.R
   );
 }
 
-const inputCls = "w-full bg-[#060e1c] border border-[#1e2d4a] focus:border-[#2563eb] text-[#c8daf0] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none placeholder-[#2a4060] transition-colors";
+const inputCls = "w-full bg-[#060e1c] border border-[#1e2d4a] focus:border-[#2563eb] text-[#c8daf0] text-[11px] font-mono px-3 py-2 rounded-sm focus:outline-none placeholder-[#4a7090] transition-colors";
 const selectCls = `${inputCls} appearance-none cursor-pointer`;
 
 function statusIcon(s: string) {
@@ -114,11 +114,11 @@ export default function SellLeads() {
               <Upload className="w-4 h-4 text-[#00d084]" />
               <h1 className="text-[16px] font-mono font-bold text-[#c8daf0] tracking-wide">SELL LEADS</h1>
             </div>
-            <p className="text-[10px] font-mono text-[#3a5070]">Submit a lead and it goes live on the marketplace instantly — AI-scored and priced.</p>
+            <p className="text-[10px] font-mono text-[#7a9abf]">Submit a lead and it goes live on the marketplace instantly — AI-scored and priced.</p>
           </div>
           <div className="text-right">
             <div className="text-[22px] font-mono font-bold text-[#00d084] num">{mySubs.filter((s:any) => s.status==="approved").length}</div>
-            <div className="text-[9px] font-mono text-[#3a5070]">LEADS LISTED</div>
+            <div className="text-[9px] font-mono text-[#7a9abf]">LEADS LISTED</div>
           </div>
         </div>
 
@@ -128,9 +128,9 @@ export default function SellLeads() {
             <CheckCircle2 className="w-5 h-5 text-[#00d084] flex-shrink-0" />
             <div>
               <p className="text-[12px] font-mono font-bold text-[#00d084]">LEAD NOW LIVE</p>
-              <p className="text-[10px] font-mono text-[#4a6080] mt-0.5">Your lead has been AI-scored and is active on the marketplace. Buyers can purchase it immediately.</p>
+              <p className="text-[10px] font-mono text-[#94b4d4] mt-0.5">Your lead has been AI-scored and is active on the marketplace. Buyers can purchase it immediately.</p>
             </div>
-            <button onClick={() => setSubmitted(false)} className="ml-auto text-[#2a4060] hover:text-[#00d084] text-[10px] font-mono">LIST ANOTHER</button>
+            <button onClick={() => setSubmitted(false)} className="ml-auto text-[#7a9abf] hover:text-[#00d084] text-[10px] font-mono">LIST ANOTHER</button>
           </div>
         )}
 
@@ -143,7 +143,7 @@ export default function SellLeads() {
             <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-5">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#1e2d4a]">
                 <User className="w-3.5 h-3.5 text-[#38bdf8]" />
-                <span className="text-[10px] font-mono tracking-widest text-[#4a6080]">LEAD CONTACT INFORMATION</span>
+                <span className="text-[10px] font-mono tracking-widest text-[#7a9abf]">LEAD CONTACT INFORMATION</span>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="FIRST NAME" required>
@@ -172,7 +172,7 @@ export default function SellLeads() {
                       <option value="">Select state…</option>
                       {STATES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#3a5070] pointer-events-none" />
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#7a9abf] pointer-events-none" />
                   </div>
                   {errors.state && <p className="text-[9px] font-mono text-[#ff4d4d] mt-1">{errors.state}</p>}
                 </Field>
@@ -192,10 +192,10 @@ export default function SellLeads() {
             <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-5">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#1e2d4a]">
                 <Heart className="w-3.5 h-3.5 text-[#a78bfa]" />
-                <span className="text-[10px] font-mono tracking-widest text-[#4a6080]">LEAD INTERESTS & COMPLIANCE</span>
+                <span className="text-[10px] font-mono tracking-widest text-[#7a9abf]">LEAD INTERESTS & COMPLIANCE</span>
               </div>
               <div className="space-y-3">
-                <p className="text-[9px] font-mono text-[#3a5070]">SELECT ALL THAT APPLY <span className="text-[#ff4d4d]">*</span></p>
+                <p className="text-[9px] font-mono text-[#7a9abf]">SELECT ALL THAT APPLY <span className="text-[#ff4d4d]">*</span></p>
                 {[
                   { key: "interestedInMedicare",     label: "Medicare",        color: "#a78bfa", desc: "Age 65+ or disability" },
                   { key: "interestedInACA",           label: "ACA / Obamacare", color: "#38bdf8", desc: "Marketplace health plans" },
@@ -213,7 +213,7 @@ export default function SellLeads() {
                     </div>
                     <div>
                       <span className="text-[11px] font-mono text-[#c8daf0]">{opt.label}</span>
-                      <span className="text-[9px] font-mono text-[#3a5070] ml-2">{opt.desc}</span>
+                      <span className="text-[9px] font-mono text-[#7a9abf] ml-2">{opt.desc}</span>
                     </div>
                     <div className="ml-auto w-2 h-2 rounded-full" style={{ background: (form as any)[opt.key] ? opt.color : "#2a4060" }} />
                   </label>
@@ -230,7 +230,7 @@ export default function SellLeads() {
                   </div>
                   <div>
                     <span className="text-[11px] font-mono text-[#c8daf0]">TCPA Consent Obtained</span>
-                    <span className="text-[9px] font-mono text-[#3a5070] ml-2">Seller certifies written consent was obtained and documented</span>
+                    <span className="text-[9px] font-mono text-[#7a9abf] ml-2">Seller certifies written consent was obtained and documented</span>
                   </div>
                 </label>
               </div>
@@ -240,7 +240,7 @@ export default function SellLeads() {
             <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-5">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#1e2d4a]">
                 <DollarSign className="w-3.5 h-3.5 text-[#fbbf24]" />
-                <span className="text-[10px] font-mono tracking-widest text-[#4a6080]">INCOME & HOUSEHOLD (OPTIONAL)</span>
+                <span className="text-[10px] font-mono tracking-widest text-[#7a9abf]">INCOME & HOUSEHOLD (OPTIONAL)</span>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="ANNUAL INCOME ($)">
@@ -258,7 +258,7 @@ export default function SellLeads() {
             <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-5">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#1e2d4a]">
                 <Briefcase className="w-3.5 h-3.5 text-[#00d084]" />
-                <span className="text-[10px] font-mono tracking-widest text-[#4a6080]">MARKETPLACE LISTING DETAILS</span>
+                <span className="text-[10px] font-mono tracking-widest text-[#7a9abf]">MARKETPLACE LISTING DETAILS</span>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="INDUSTRY / LEAD TYPE" required>
@@ -266,7 +266,7 @@ export default function SellLeads() {
                     <select value={form.industry} onChange={e => set("industry", e.target.value)} className={selectCls}>
                       {INDUSTRIES.map(i => <option key={i} value={i}>{i.replace("_", " ").toUpperCase()}</option>)}
                     </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#3a5070] pointer-events-none" />
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#7a9abf] pointer-events-none" />
                   </div>
                 </Field>
                 <Field label="ASKING PRICE ($)" required>
@@ -298,7 +298,7 @@ export default function SellLeads() {
           <div className="space-y-4">
             {/* How it works */}
             <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
-              <p className="text-[10px] font-mono tracking-widest text-[#4a6080] mb-4">HOW IT WORKS</p>
+              <p className="text-[10px] font-mono tracking-widest text-[#7a9abf] mb-4">HOW IT WORKS</p>
               <div className="space-y-4">
                 {[
                   { n: "1", label: "SUBMIT",   desc: "Fill out the lead form with all available contact details" },
@@ -312,7 +312,7 @@ export default function SellLeads() {
                     </div>
                     <div>
                       <p className="text-[10px] font-mono text-[#94b4d4]">{step.label}</p>
-                      <p className="text-[9px] font-mono text-[#3a5070] mt-0.5">{step.desc}</p>
+                      <p className="text-[9px] font-mono text-[#7a9abf] mt-0.5">{step.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -321,7 +321,7 @@ export default function SellLeads() {
 
             {/* Pricing tips */}
             <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm p-4">
-              <p className="text-[10px] font-mono tracking-widest text-[#4a6080] mb-3">PRICING GUIDE</p>
+              <p className="text-[10px] font-mono tracking-widest text-[#7a9abf] mb-3">PRICING GUIDE</p>
               <div className="space-y-2">
                 {[
                   { label: "Medicare (65+, TCPA)",     price: "$45–$65" },
@@ -331,7 +331,7 @@ export default function SellLeads() {
                   { label: "High-demand state (FL/CA)", price: "+$5–$15" },
                 ].map(r => (
                   <div key={r.label} className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono text-[#4a6080]">{r.label}</span>
+                    <span className="text-[9px] font-mono text-[#94b4d4]">{r.label}</span>
                     <span className="text-[10px] font-mono text-[#00d084]">{r.price}</span>
                   </div>
                 ))}
@@ -352,25 +352,25 @@ export default function SellLeads() {
         {mySubs.length > 0 && (
           <div className="bg-[#0d1526] border border-[#1e2d4a] rounded-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-[#1e2d4a] flex items-center justify-between">
-              <span className="text-[10px] font-mono tracking-widest text-[#4a6080]">MY SUBMISSIONS</span>
-              <span className="text-[10px] font-mono text-[#3a5070]">{mySubs.length} total</span>
+              <span className="text-[10px] font-mono tracking-widest text-[#7a9abf]">MY SUBMISSIONS</span>
+              <span className="text-[10px] font-mono text-[#7a9abf]">{mySubs.length} total</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#1e2d4a]">
                     {["#","NAME","INDUSTRY","STATE","ASKING","STATUS","SUBMITTED","ADMIN NOTES"].map(h => (
-                      <th key={h} className="px-4 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070] whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-4 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#7a9abf] whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#0a1120]">
                   {mySubs.map((s: any) => (
                     <tr key={s.id} className="hover:bg-[#0a1628] transition-colors">
-                      <td className="px-4 py-3 text-[10px] font-mono text-[#3a5070] num">#{s.id}</td>
+                      <td className="px-4 py-3 text-[10px] font-mono text-[#7a9abf] num">#{s.id}</td>
                       <td className="px-4 py-3 text-[11px] font-mono text-[#94b4d4]">{s.firstName} {s.lastName}</td>
-                      <td className="px-4 py-3 text-[10px] font-mono text-[#4a6080]">{s.industry?.toUpperCase()}</td>
-                      <td className="px-4 py-3 text-[10px] font-mono text-[#4a6080]">{s.state}</td>
+                      <td className="px-4 py-3 text-[10px] font-mono text-[#94b4d4]">{s.industry?.toUpperCase()}</td>
+                      <td className="px-4 py-3 text-[10px] font-mono text-[#94b4d4]">{s.state}</td>
                       <td className="px-4 py-3 text-[12px] font-mono font-bold text-[#00d084] num">${s.askingPrice}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
@@ -378,10 +378,10 @@ export default function SellLeads() {
                           <span className={`text-[10px] font-mono font-bold ${statusColor(s.status)}`}>{s.status.toUpperCase()}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-[9px] font-mono text-[#2a4060]">
+                      <td className="px-4 py-3 text-[9px] font-mono text-[#7a9abf]">
                         {s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "—"}
                       </td>
-                      <td className="px-4 py-3 text-[9px] font-mono text-[#4a6080] max-w-[160px] truncate">{s.adminNotes || "—"}</td>
+                      <td className="px-4 py-3 text-[9px] font-mono text-[#94b4d4] max-w-[160px] truncate">{s.adminNotes || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
