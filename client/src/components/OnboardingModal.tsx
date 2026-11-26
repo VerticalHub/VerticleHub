@@ -11,7 +11,7 @@ const STEPS = [
   {
     id: 1,
     tag: "WELCOME",
-    title: "Welcome to HealthLead Pro",
+    title: "Welcome to LeadHealth",
     subtitle: "The #1 Healthcare Lead Intelligence Platform",
     color: "#38bdf8",
     icon: Activity,

@@ -72,8 +72,6 @@ export default function App() {
           <title>LeadHealth — The Lead & Call Exchange for Health Insurance Agents</title>
           <meta name="description" content="Buy and sell verified ACA, Medicare, and Final Expense leads and calls on the live LeadHealth exchange. Real-time pricing, AI demand intelligence, and TCPA-compliant lead generation for health insurance agents." />
           <meta name="keywords" content="health insurance leads, buy health insurance leads, sell health insurance leads, ACA leads, medicare leads, final expense leads, health insurance calls, lead exchange, lead marketplace, insurance lead trading, TCPA leads, medicare advantage leads, obamacare leads, insurance agent leads" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-          <meta name="robots" content="index, follow" />
           <meta name="author" content="LeadHealth" />
           <meta property="og:type" content="website" />
           <meta property="og:site_name" content="LeadHealth" />
@@ -81,7 +79,6 @@ export default function App() {
           <meta property="og:title" content="LeadHealth — The Lead & Call Exchange for Health Insurance Agents" />
           <meta property="og:description" content="Buy and sell verified ACA, Medicare, and Final Expense leads and calls on the live LeadHealth exchange. Real-time pricing, AI demand intelligence, and TCPA-compliant lead generation." />
           <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:site" content="@leadhealthco" />
           <meta name="twitter:url" content="https://www.leadhealth.co/" />
           <meta name="twitter:title" content="LeadHealth — The Lead & Call Exchange for Health Insurance Agents" />
           <meta name="twitter:description" content="Buy and sell verified ACA, Medicare, and Final Expense leads and calls on the live LeadHealth exchange." />

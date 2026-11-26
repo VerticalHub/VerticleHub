@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { Activity, Lock, User, Eye, EyeOff, AlertCircle, Gift } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, apiErrorMessage, queryClient } from "@/lib/queryClient";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -27,7 +27,7 @@ export default function Login() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setLocation("/dashboard");
     },
-    onError: (err: any) => setError(err.message || "Invalid credentials"),
+    onError: (err: any) => setError(apiErrorMessage(err, "Invalid credentials")),
   });
 
   const registerMutation = useMutation({
@@ -36,7 +36,7 @@ export default function Login() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setLocation("/dashboard");
     },
-    onError: (err: any) => setError(err.message || "Registration failed"),
+    onError: (err: any) => setError(apiErrorMessage(err, "Registration failed")),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -60,10 +60,10 @@ export default function Login() {
         <div className="w-9 h-9 rounded-sm bg-[#0ea5e9] flex items-center justify-center">
           <Activity className="w-5 h-5 text-white" />
         </div>
-        <div className="leading-none">
-          <span className="text-[18px] font-bold font-mono text-white tracking-tight">HEALTHLEAD</span>
-          <span className="text-[18px] font-bold font-mono text-[#0ea5e9] tracking-tight">PRO</span>
-        </div>
+        <h1 className="leading-none">
+          <span className="text-[18px] font-bold font-mono text-white tracking-tight">LEAD</span>
+          <span className="text-[18px] font-bold font-mono text-[#0ea5e9] tracking-tight">HEALTH</span>
+        </h1>
       </div>
 
       {/* Referral banner */}
@@ -72,7 +72,7 @@ export default function Login() {
           <Gift className="w-4 h-4 text-[#00d084] flex-shrink-0" />
           <div>
             <p className="text-[10px] font-mono font-bold text-[#00d084]">YOU WERE REFERRED!</p>
-            <p className="text-[9px] font-mono text-[#3a5070] mt-0.5">Sign up now — your referrer earns $25 in credits</p>
+            <p className="text-[9px] font-mono text-[#3a5070] mt-0.5">Sign up now — your referrer earns $25 in credits after your first purchase</p>
           </div>
         </div>
       )}
@@ -162,16 +162,11 @@ export default function Login() {
             {isPending ? "AUTHENTICATING..." : tab === "login" ? "SIGN IN →" : "CREATE ACCOUNT →"}
           </button>
 
-          {tab === "login" && (
-            <p className="text-center text-[9px] font-mono text-[#2a4060]">
-              Demo: <span className="text-[#38bdf8]">admin</span> / <span className="text-[#38bdf8]">admin123</span>
-            </p>
-          )}
         </form>
       </div>
 
       <p className="mt-6 text-[9px] font-mono text-[#1e2d4a]">
-        HEALTHLEADPRO · HEALTHCARE LEAD INTELLIGENCE PLATFORM
+        LEADHEALTH · THE LEAD & CALL EXCHANGE FOR HEALTH INSURANCE AGENTS
       </p>
     </div>
   );

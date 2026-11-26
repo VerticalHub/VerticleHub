@@ -195,8 +195,8 @@ export default function Header() {
                   <Activity className="w-4 h-4 text-white" />
                 </div>
                 <div className="leading-none">
-                  <span className="text-[13px] font-bold font-mono text-white tracking-tight">HEALTHLEAD</span>
-                  <span className="text-[13px] font-bold font-mono text-[#0ea5e9] tracking-tight">PRO</span>
+                  <span className="text-[13px] font-bold font-mono text-white tracking-tight">LEAD</span>
+                  <span className="text-[13px] font-bold font-mono text-[#0ea5e9] tracking-tight">HEALTH</span>
                 </div>
               </div>
             </Link>

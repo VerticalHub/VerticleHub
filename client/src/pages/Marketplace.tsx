@@ -441,6 +441,11 @@ export default function Marketplace() {
       queryClient.invalidateQueries({ queryKey: ["/api/credits", myId] });
       toast({ title: "Credits deposited", description: "Your account balance has been updated.", variant: "success" as any });
     },
+    onError: () => toast({
+      title: "Can't add credits online yet",
+      description: "Online payments aren't available yet. Contact support to add credits to your account.",
+      variant: "destructive",
+    }),
   });
 
   const bulkPurchaseMutation = useMutation({

@@ -55,3 +55,14 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Turns an apiRequest error ("401: {\"message\":\"...\"}") into a readable message.
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : "";
+  const body = raw.replace(/^\d{3}:\s*/, "");
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed?.message === "string" && parsed.message) return parsed.message;
+  } catch { /* not JSON */ }
+  return body && !body.startsWith("<") ? body : fallback;
+}

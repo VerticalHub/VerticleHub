@@ -269,10 +269,19 @@ export default function Dashboard() {
     refetchInterval: 30_000,
   });
 
+  const { data: meResp } = useQuery<any>({
+    queryKey: ["/api/auth/me"],
+    queryFn: () => fetch("/api/auth/me").then(r => r.json()),
+    staleTime: 60_000,
+  });
+  const isAdmin = meResp?.data?.role === "admin";
+
+  // The full lead list is admin-only on the server.
   const { data: leadsResp } = useQuery<any>({
     queryKey: ["/api/leads"],
     queryFn: () => fetch("/api/leads").then(r => r.json()),
     staleTime: 60_000,
+    enabled: isAdmin,
   });
 
   const { data: alertsResp } = useQuery<any>({

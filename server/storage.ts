@@ -125,6 +125,13 @@ export interface IStorage {
   createReferral(ref: InsertReferral): Promise<Referral>;
   getReferralsByReferrer(referrerId: number): Promise<Referral[]>;
   getReferralCount(referrerId: number): Promise<number>;
+  updateUserPassword(id: number, passwordHash: string): Promise<void>;
+  claimPendingReferral(refereeId: number): Promise<Referral | undefined>;
+
+  // Atomic money/listing operations (prevent double-spend and double-sell)
+  debitIfSufficient(userId: number, amount: string): Promise<boolean>;
+  claimListing(listingId: number): Promise<boolean>;
+  releaseListing(listingId: number): Promise<void>;
 
   // Seller Submissions
   createSubmission(sub: InsertLeadSubmission): Promise<LeadSubmission>;
@@ -135,6 +142,9 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // ── Users ──────────────────────────────────────────────────────────────────
+  async updateUserPassword(id: number, passwordHash: string): Promise<void> {
+    await db.update(users).set({ password: passwordHash }).where(eq(users.id, id));
+  }
   async updateUserDisplayName(id: number, displayName: string) {
     const [updated] = await db
       .update(users)
@@ -561,6 +571,33 @@ export class DatabaseStorage implements IStorage {
   async getReferralCount(referrerId: number): Promise<number> {
     const rows = await db.select().from(referrals).where(eq(referrals.referrerId, referrerId));
     return rows.length;
+  }
+  // Flips the referee's pending referral to completed exactly once; returns it if this call won.
+  async claimPendingReferral(refereeId: number): Promise<Referral | undefined> {
+    const [row] = await db.update(referrals)
+      .set({ status: "completed" })
+      .where(and(eq(referrals.refereeId, refereeId), eq(referrals.status, "pending")))
+      .returning();
+    return row;
+  }
+
+  // ── Atomic money/listing operations ───────────────────────────────────────
+  async debitIfSufficient(userId: number, amount: string): Promise<boolean> {
+    const rows = await db.update(creditAccounts)
+      .set({ balance: sql`${creditAccounts.balance} - ${amount}`, updatedAt: new Date() })
+      .where(and(eq(creditAccounts.userId, userId), gte(creditAccounts.balance, amount)))
+      .returning({ id: creditAccounts.id });
+    return rows.length > 0;
+  }
+  async claimListing(listingId: number): Promise<boolean> {
+    const rows = await db.update(leadListings)
+      .set({ isActive: false })
+      .where(and(eq(leadListings.id, listingId), eq(leadListings.isActive, true)))
+      .returning({ id: leadListings.id });
+    return rows.length > 0;
+  }
+  async releaseListing(listingId: number): Promise<void> {
+    await db.update(leadListings).set({ isActive: true }).where(eq(leadListings.id, listingId));
   }
 
   // ── Seller Submissions ────────────────────────────────────────────────────

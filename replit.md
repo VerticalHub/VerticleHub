@@ -15,10 +15,21 @@ Healthcare lead generation, resale marketplace, and AI demand intelligence platf
 - bg: `#070d1a`, card: `#0d1526`, border: `#1e2d4a`, text: `#c8daf0`
 - green: `#00d084`, red: `#ff4d4d`, blue: `#38bdf8`, amber: `#fbbf24`, purple: `#a78bfa`
 
-## Demo Credentials
+## Demo Credentials (development only)
 
-- Admin: `admin` / `admin123`
-- Agent: `agent1` / `agent123`
+`SEED_DEMO_DATA=true` (set only for development in `.replit`) seeds `admin` and `agent1` with default passwords.
+Those default passwords are rejected at login when `NODE_ENV=production`. Set the `ADMIN_PASSWORD` secret
+(12+ characters) to set the admin password at startup.
+
+## Security notes
+
+- Every `/api` route except login/register, lead capture (`POST /api/leads`), credit packages, demand predictions,
+  market trends and price history requires a session. Admin data requires `role = admin`.
+- `POST /api/credits/purchase` is admin-only: there is no payment processor, so admins add credit after taking payment.
+- Referral bonuses are recorded as `pending` and paid when the referred user makes their first purchase.
+- Purchases debit credit and claim the listing with conditional updates, so concurrent requests can't overdraw or double-sell.
+- Production behind Replit's proxy needs `app.set("trust proxy", 1)` for secure session cookies.
+- Client routes are listed in `server/vite.ts` (`clientRoutes`) so unknown URLs return 404; keep it in sync with `client/src/App.tsx`.
 
 ## Pages & Routes
 
@@ -84,12 +95,12 @@ Healthcare lead generation, resale marketplace, and AI demand intelligence platf
 - `DELETE /api/price-alerts/:id` — Delete alert
 
 ### Dashboard
-- `GET /api/dashboard?userId=1` — Aggregated summary
+- `GET /api/dashboard` — Aggregated summary for the signed-in user
 
 ### Credits
 - `GET /api/credits/:userId` — Account balance
 - `GET /api/credit-packages` — Available packages
-- `POST /api/credits/purchase` — Deposit
+- `POST /api/credits/purchase` — Add credit (admin only; body `{ userId, amount }`)
 
 ### Intelligence
 - `GET /api/demand-predictions` — AI demand forecasts
