@@ -16,11 +16,6 @@ interface LeadDetailModalProps {
   onClose: () => void;
 }
 
-function mask(val: string | undefined | null, keep = 1): string {
-  if (!val) return "—";
-  return val.slice(0, keep) + "***";
-}
-
 function Bar({ value, max, color }: { value: number; max: number; color: string }) {
   return (
     <div className="w-full h-1.5 bg-[#0a1120] rounded-full overflow-hidden">
@@ -168,7 +163,7 @@ export default function LeadDetailModal({ leadId, listing, purchase, isOwned, on
           {([
             { id: "overview", label: "OVERVIEW",   icon: User    },
             { id: "score",    label: "AI SCORE",   icon: Zap     },
-            { id: "notes",    label: "NOTES",      icon: FileText },
+            ...(isOwned ? [{ id: "notes", label: "MY NOTES", icon: FileText }] : []),
           ] as { id: ModalTab; label: string; icon: any }[]).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-1.5 px-5 py-2.5 text-[9px] font-mono tracking-widest border-b-2 transition-all -mb-px ${
@@ -203,9 +198,9 @@ export default function LeadDetailModal({ leadId, listing, purchase, isOwned, on
                     <p className="text-[9px] font-mono tracking-widest text-[#3a5070] mb-3">CONTACT INFORMATION</p>
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { icon: User,    label: "FULL NAME",   value: isOwned ? `${lead.firstName} ${lead.lastName}` : `${mask(lead.firstName)} ${mask(lead.lastName)}` },
-                        { icon: Phone,   label: "PHONE",       value: isOwned ? lead.phoneNumber : (lead.phoneNumber ? `(***) ***-${String(lead.phoneNumber).slice(-4)}` : "—") },
-                        { icon: Mail,    label: "EMAIL",       value: isOwned ? lead.email : (lead.email ? `${mask(lead.email, 2)}***@***.com` : "—") },
+                        { icon: User,    label: "FULL NAME",   value: isOwned ? `${lead.firstName} ${lead.lastName}` : `${lead.firstName ?? "—"} ${lead.lastName ?? ""}` },
+                        { icon: Phone,   label: "PHONE",       value: isOwned ? lead.phoneNumber : (lead.phoneLast4 ? `(***) ***-${lead.phoneLast4}` : "—") },
+                        { icon: Mail,    label: "EMAIL",       value: isOwned ? lead.email : "Hidden until purchase" },
                         { icon: MapPin,  label: "STATE / ZIP", value: isOwned ? `${lead.state} ${lead.zipCode ?? ""}` : `${lead.state ?? "—"} *****` },
                       ].map(f => (
                         <div key={f.label} className="flex items-start gap-2 p-3 bg-[#060e1c] border border-[#1e2d4a] rounded-sm">
@@ -227,9 +222,9 @@ export default function LeadDetailModal({ leadId, listing, purchase, isOwned, on
                     <p className="text-[9px] font-mono tracking-widest text-[#3a5070] mb-3">DEMOGRAPHICS</p>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       {[
-                        { label: "DATE OF BIRTH", value: lead.dateOfBirth ?? "—" },
+                        { label: lead.masked ? "BIRTH YEAR" : "DATE OF BIRTH", value: lead.dateOfBirth ? (lead.masked ? String(lead.dateOfBirth).slice(0, 4) : lead.dateOfBirth) : "—" },
                         { label: "AGE",           value: lead.dateOfBirth ? `${Math.floor((Date.now() - new Date(lead.dateOfBirth).getTime()) / (365.25*86400000))} yrs` : "—" },
-                        { label: "ANNUAL INCOME", value: lead.annualIncome ? `$${Number(lead.annualIncome).toLocaleString()}` : "—" },
+                        { label: "ANNUAL INCOME", value: lead.annualIncome ? `${lead.masked ? "~" : ""}$${Number(lead.annualIncome).toLocaleString()}` : "—" },
                         { label: "HOUSEHOLD",     value: lead.householdSize ? `${lead.householdSize} people` : "—" },
                       ].map(f => (
                         <div key={f.label} className="p-3 bg-[#060e1c] border border-[#1e2d4a] rounded-sm">
@@ -353,7 +348,7 @@ export default function LeadDetailModal({ leadId, listing, purchase, isOwned, on
                 <div className="space-y-4">
                   <div>
                     <p className="text-[9px] font-mono tracking-widest text-[#3a5070] mb-1.5">CONTACT NOTES</p>
-                    <p className="text-[9px] font-mono text-[#2a4060] mb-3">Log call outcomes, follow-up details, or any relevant notes about this lead.</p>
+                    <p className="text-[9px] font-mono text-[#2a4060] mb-3">Log call outcomes, follow-up details, or any relevant notes about this lead. Only you can see your notes.</p>
                     <textarea
                       value={notes}
                       onChange={e => { setNotes(e.target.value); setNotesDirty(true); }}

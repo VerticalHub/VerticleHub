@@ -30,17 +30,37 @@ Those default passwords are rejected at login when `NODE_ENV=production`. Set th
 - Purchases debit credit and claim the listing with conditional updates, so concurrent requests can't overdraw or double-sell.
 - Production behind Replit's proxy needs `app.set("trust proxy", 1)` for secure session cookies.
 - Client routes are listed in `server/vite.ts` (`clientRoutes`) so unknown URLs return 404; keep it in sync with `client/src/App.tsx`.
+- Lead visibility (`GET /api/leads/:id`): admins see everything; a buyer sees the full lead with their own private
+  notes (`lead_purchases.buyer_notes`); anyone signed in sees a server-masked preview of a lead that is for sale.
+- Consumer opt-outs (`POST /api/opt-out`, public, rate-limited) mark matching leads DNC and pull their listings.
+  Admins see them in Command Center → OPT-OUTS.
+- `storage.ensureSchema()` runs at startup and adds columns/tables introduced later (idempotent). New tables must
+  also be declared in `shared/schema.ts`, because `db:push --force` (post-merge) drops tables it doesn't know.
+- `npm test` runs API access-control tests with an in-memory storage fake (no database needed).
+
+## Public pages and SEO
+
+- Public routes: `/` (landing), `/login`, `/privacy`, `/terms`, `/opt-out`. Everything else requires sign-in and is
+  served with `noindex`.
+- `server/seo.ts` injects each public page's title, description, canonical URL and a plain-HTML summary into
+  `index.html` in production. Keep it in step with the React pages in `client/src/pages/public/`.
+- `client/src/lib/site.ts` holds the support email and legal entity name shown on the legal pages; fill them in.
+- Pages are lazy-loaded per route (`client/src/App.tsx`); hashed assets are served with a one-year immutable cache.
+- Copy must describe what the code actually does. Don't add claims like "HIPAA compliant" or "verified" without
+  backing them up.
 
 ## Pages & Routes
 
 | Route | Page | Description |
 |---|---|---|
-| `/login` | Login | Sign in / register |
+| `/` | Landing | Public marketing page (signed-in users are redirected to /dashboard) |
+| `/login` | Login | Sign in / register (`?tab=register` opens registration) |
+| `/privacy`, `/terms`, `/opt-out` | Legal | Public privacy policy, terms, consumer opt-out form |
 | `/dashboard` | Dashboard | Post-login landing — KPI overview, pipeline charts, alerts, quick actions |
-| `/leads` | Leads | Pipeline funnel, analytics, CRM activity log, lead capture link |
+| `/leads` | Leads | Admin: pipeline, analytics, CRM. Agents: My Leads (purchased leads with contacts, CSV export) |
 | `/home` | Home | TCPA-compliant lead intake form |
 | `/marketplace` | Marketplace | Order book, watchlist, portfolio, AI signals |
-| `/admin` | Admin | Command center — overview, lead DB, listings, market data, users |
+| `/admin` | Admin | Command center (admin only) — overview, lead DB, listings, market data, users + add credit, opt-outs |
 | `/thank-you` | ThankYou | Post-submission confirmation |
 
 ## Key Features

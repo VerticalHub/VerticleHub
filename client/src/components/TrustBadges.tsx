@@ -28,22 +28,22 @@ export default function TrustBadges() {
         >
           <motion.div className="flex items-center" variants={itemVariants}>
             <Shield className="text-primary-600 w-8 h-8 mr-3" />
-            <span className="text-gray-700 font-medium">HIPAA Compliant</span>
+            <span className="text-gray-700 font-medium">Encrypted Connection</span>
           </motion.div>
           
           <motion.div className="flex items-center" variants={itemVariants}>
             <Lock className="text-primary-600 w-8 h-8 mr-3" />
-            <span className="text-gray-700 font-medium">Secure & Private</span>
+            <span className="text-gray-700 font-medium">Your Consent Recorded</span>
           </motion.div>
           
           <motion.div className="flex items-center" variants={itemVariants}>
             <CheckCircle className="text-primary-600 w-8 h-8 mr-3" />
-            <span className="text-gray-700 font-medium">Verified Providers</span>
+            <span className="text-gray-700 font-medium">Opt Out Anytime</span>
           </motion.div>
           
           <motion.div className="flex items-center" variants={itemVariants}>
             <Clock className="text-primary-600 w-8 h-8 mr-3" />
-            <span className="text-gray-700 font-medium">Quick Results</span>
+            <span className="text-gray-700 font-medium">No Government Affiliation</span>
           </motion.div>
         </motion.div>
       </div>

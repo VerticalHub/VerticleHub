@@ -1,65 +1,89 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme";
-import OnboardingModal from "@/components/OnboardingModal";
-import Leads from "@/pages/Leads";
-import Home from "@/pages/Home";
-import ThankYou from "@/pages/ThankYou";
-import Marketplace from "@/pages/Marketplace";
-import Admin from "@/pages/Admin";
-import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
-import SellLeads from "@/pages/SellLeads";
-import Referrals from "@/pages/Referrals";
-import Profile from "@/pages/Profile";
-import NotFound from "@/pages/not-found";
 import { Helmet } from "react-helmet";
 
-function AuthGuard({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
-  const { data, isLoading } = useQuery({
+// Each page is its own chunk, so visitors only download the code for the page they open.
+const OnboardingModal = lazy(() => import("@/components/OnboardingModal"));
+const Leads       = lazy(() => import("@/pages/Leads"));
+const Home        = lazy(() => import("@/pages/Home"));
+const ThankYou    = lazy(() => import("@/pages/ThankYou"));
+const Marketplace = lazy(() => import("@/pages/Marketplace"));
+const Admin       = lazy(() => import("@/pages/Admin"));
+const Login       = lazy(() => import("@/pages/Login"));
+const Dashboard   = lazy(() => import("@/pages/Dashboard"));
+const SellLeads   = lazy(() => import("@/pages/SellLeads"));
+const Referrals   = lazy(() => import("@/pages/Referrals"));
+const Profile     = lazy(() => import("@/pages/Profile"));
+const NotFound    = lazy(() => import("@/pages/not-found"));
+const Landing     = lazy(() => import("@/pages/public/Landing"));
+const OptOut      = lazy(() => import("@/pages/public/OptOut"));
+const Privacy     = lazy(() => import("@/pages/public/Legal").then(m => ({ default: m.Privacy })));
+const Terms       = lazy(() => import("@/pages/public/Legal").then(m => ({ default: m.Terms })));
+
+function useMe() {
+  return useQuery<any>({
     queryKey: ["/api/auth/me"],
     queryFn: () => fetch("/api/auth/me").then(r => r.json()),
     retry: false,
     staleTime: 60_000,
   });
+}
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#070d1a] flex items-center justify-center">
-        <div className="text-[12px] font-mono text-[#2a4060] tracking-widest animate-pulse">AUTHENTICATING...</div>
-      </div>
-    );
-  }
+function Loading({ label = "LOADING..." }: { label?: string }) {
+  return (
+    <div className="min-h-screen bg-[#070d1a] flex items-center justify-center">
+      <div className="text-[12px] font-mono text-[#7a9abf] tracking-widest animate-pulse" role="status">{label}</div>
+    </div>
+  );
+}
 
+function AuthGuard({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
+  const [location] = useLocation();
+  const { data, isLoading } = useMe();
+
+  if (isLoading) return <Loading label="AUTHENTICATING..." />;
   if (!data?.success && location !== "/login") return <Redirect to="/login" />;
+  if (adminOnly && data?.data?.role !== "admin") return <Redirect to="/dashboard" />;
   return (
     <>
+      {/* Signed-in app pages are private: keep them out of search results. */}
+      <Helmet><meta name="robots" content="noindex, nofollow" /></Helmet>
       <OnboardingModal />
       {children}
     </>
   );
 }
 
+const guarded = (Page: React.ComponentType, adminOnly = false) => () => <AuthGuard adminOnly={adminOnly}><Page /></AuthGuard>;
+
 function Router() {
   return (
-    <Switch>
-      <Route path="/login"       component={Login} />
-      <Route path="/"            component={() => <Redirect to="/dashboard" />} />
-      <Route path="/dashboard"   component={() => <AuthGuard><Dashboard /></AuthGuard>} />
-      <Route path="/leads"       component={() => <AuthGuard><Leads /></AuthGuard>} />
-      <Route path="/home"        component={() => <AuthGuard><Home /></AuthGuard>} />
-      <Route path="/thank-you"   component={() => <AuthGuard><ThankYou /></AuthGuard>} />
-      <Route path="/marketplace" component={() => <AuthGuard><Marketplace /></AuthGuard>} />
-      <Route path="/sell"        component={() => <AuthGuard><SellLeads /></AuthGuard>} />
-      <Route path="/referrals"   component={() => <AuthGuard><Referrals /></AuthGuard>} />
-      <Route path="/admin"       component={() => <AuthGuard><Admin /></AuthGuard>} />
-      <Route path="/profile"     component={() => <AuthGuard><Profile /></AuthGuard>} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<Loading />}>
+      <Switch>
+        {/* Public */}
+        <Route path="/"            component={Landing} />
+        <Route path="/login"       component={Login} />
+        <Route path="/privacy"     component={Privacy} />
+        <Route path="/terms"       component={Terms} />
+        <Route path="/opt-out"     component={OptOut} />
+        {/* Signed in */}
+        <Route path="/dashboard"   component={guarded(Dashboard)} />
+        <Route path="/leads"       component={guarded(Leads)} />
+        <Route path="/home"        component={guarded(Home)} />
+        <Route path="/thank-you"   component={guarded(ThankYou)} />
+        <Route path="/marketplace" component={guarded(Marketplace)} />
+        <Route path="/sell"        component={guarded(SellLeads)} />
+        <Route path="/referrals"   component={guarded(Referrals)} />
+        <Route path="/profile"     component={guarded(Profile)} />
+        <Route path="/admin"       component={guarded(Admin, true)} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
@@ -68,22 +92,8 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
       <TooltipProvider>
-        <Helmet>
-          <title>LeadHealth — The Lead & Call Exchange for Health Insurance Agents</title>
-          <meta name="description" content="Buy and sell verified ACA, Medicare, and Final Expense leads and calls on the live LeadHealth exchange. Real-time pricing, AI demand intelligence, and TCPA-compliant lead generation for health insurance agents." />
-          <meta name="keywords" content="health insurance leads, buy health insurance leads, sell health insurance leads, ACA leads, medicare leads, final expense leads, health insurance calls, lead exchange, lead marketplace, insurance lead trading, TCPA leads, medicare advantage leads, obamacare leads, insurance agent leads" />
-          <meta name="author" content="LeadHealth" />
-          <meta property="og:type" content="website" />
-          <meta property="og:site_name" content="LeadHealth" />
-          <meta property="og:url" content="https://www.leadhealth.co/" />
-          <meta property="og:title" content="LeadHealth — The Lead & Call Exchange for Health Insurance Agents" />
-          <meta property="og:description" content="Buy and sell verified ACA, Medicare, and Final Expense leads and calls on the live LeadHealth exchange. Real-time pricing, AI demand intelligence, and TCPA-compliant lead generation." />
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:url" content="https://www.leadhealth.co/" />
-          <meta name="twitter:title" content="LeadHealth — The Lead & Call Exchange for Health Insurance Agents" />
-          <meta name="twitter:description" content="Buy and sell verified ACA, Medicare, and Final Expense leads and calls on the live LeadHealth exchange." />
-          <link rel="canonical" href="https://www.leadhealth.co/" />
-          <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <Helmet defaultTitle="LeadHealth — The Lead & Call Exchange for Health Insurance Agents">
+          <meta name="description" content="A marketplace where health insurance agents buy and sell ACA, Medicare and Final Expense leads. Every lead is scored 0–100, TCPA consent is tracked, and Do Not Call requests are enforced." />
         </Helmet>
         <Toaster />
         <Router />

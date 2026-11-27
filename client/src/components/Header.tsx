@@ -156,13 +156,14 @@ export default function Header() {
   useEffect(() => { setMobileOpen(false); }, [location]);
 
   const doubled = [...tickers, ...tickers];
+  const isAdmin = me?.role === "admin";
   const navItems = [
     { href: "/dashboard",   label: "DASHBOARD",      icon: LayoutDashboard },
-    { href: "/leads",       label: "LEADS",          icon: Activity        },
+    { href: "/leads",       label: isAdmin ? "LEADS" : "MY LEADS", icon: Activity },
     { href: "/marketplace", label: "MARKETPLACE",    icon: BarChart2       },
     { href: "/sell",        label: "SELL LEADS",     icon: Upload          },
     { href: "/referrals",   label: "REFERRALS",      icon: Gift            },
-    { href: "/admin",       label: "COMMAND CENTER", icon: Shield          },
+    ...(isAdmin ? [{ href: "/admin", label: "COMMAND CENTER", icon: Shield }] : []),
   ];
   const marketOpen = isMarketOpen();
   const displayAlerts = notifOpen ? allAlerts : unreadAlerts;

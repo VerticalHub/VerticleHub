@@ -9,9 +9,10 @@ import Header from "@/components/Header";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import ScoreBadge from "@/components/ScoreBadge";
+import { AddCreditControl, OptOutsPanel } from "@/components/AdminExtras";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from "recharts";
 
-type Tab = "overview" | "leads" | "listings" | "new" | "market" | "users" | "submissions";
+type Tab = "overview" | "leads" | "listings" | "new" | "market" | "users" | "submissions" | "optouts";
 
 const STATUS_OPTS = ["new", "contacted", "qualified", "converted", "archived"];
 const STATUS_COLORS: Record<string, string> = {
@@ -247,6 +248,7 @@ export default function Admin() {
     { id: "market",       label: "MARKET DATA",  icon: TrendingUp },
     { id: "users",        label: "USERS",        icon: Users      },
     { id: "submissions",  label: "SUBMISSIONS",  icon: Upload     },
+    { id: "optouts",      label: "OPT-OUTS",     icon: Shield     },
   ];
 
   const stateChartData = stats
@@ -842,6 +844,9 @@ export default function Admin() {
           </div>
         )}
 
+        {/* ── OPT-OUTS ────────────────────────────────────────────────────── */}
+        {tab === "optouts" && <OptOutsPanel />}
+
         {/* ── USERS ───────────────────────────────────────────────────────── */}
         {tab === "users" && (
           <div className="fade-in space-y-4">
@@ -868,14 +873,14 @@ export default function Admin() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[#1e2d4a]">
-                      {["ID","USERNAME","EMAIL","ROLE","BALANCE","TOTAL SPENT","PURCHASES","REGISTERED"].map(h => (
+                      {["ID","USERNAME","EMAIL","ROLE","BALANCE","TOTAL SPENT","PURCHASES","REGISTERED","CREDIT"].map(h => (
                         <th key={h} className="px-4 py-2.5 text-left text-[9px] font-mono tracking-widest text-[#3a5070] whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#0a1120]">
                     {allUsers.length === 0 ? (
-                      <tr><td colSpan={8} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO USERS</td></tr>
+                      <tr><td colSpan={9} className="px-4 py-10 text-center text-[11px] font-mono text-[#2a4060]">NO USERS</td></tr>
                     ) : allUsers.map((u: any) => (
                       <tr key={u.id} className="hover:bg-[#0a1628] transition-colors">
                         <td className="px-4 py-3 text-[11px] font-mono text-[#4a6080] num">{u.id}</td>
@@ -905,6 +910,7 @@ export default function Admin() {
                         <td className="px-4 py-3 text-[10px] font-mono text-[#2a4060]">
                           {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
                         </td>
+                        <td className="px-4 py-3"><AddCreditControl userId={u.id} username={u.username} /></td>
                       </tr>
                     ))}
                   </tbody>

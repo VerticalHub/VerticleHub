@@ -509,7 +509,7 @@ export default function Marketplace() {
           listing={confirmListing}
           balance={credits}
           onConfirm={() => purchaseMutation.mutate({ listingId: confirmListing.id })}
-          onCancel={() => setConfirm(null)}
+          onClose={() => setConfirm(null)}
           isPending={purchaseMutation.isPending}
         />
       )}

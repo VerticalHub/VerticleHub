@@ -1,104 +1,53 @@
 # LeadHealth
 
-> The live exchange marketplace for buying and selling verified healthcare leads and calls — built for insurance agents and agencies.
+> A marketplace where health insurance agents and agencies buy and sell ACA, Medicare and Final Expense consumer leads. Every lead is scored 0–100, TCPA consent is recorded, and Do Not Call requests are enforced.
 
 Website: https://www.leadhealth.co
 
-## What Is LeadHealth?
+## What LeadHealth does
 
-LeadHealth is the stock market for healthcare leads and calls. Just like a financial exchange matches buyers and sellers of securities in real time, LeadHealth connects insurance agents who generate consumer leads with agents and agencies who need them — at transparent, market-driven prices.
+LeadHealth connects agents who generate consumer leads with agents and agencies who want to buy them. Each lead is a consumer who asked about health insurance coverage: ACA/Obamacare, Medicare, or Final Expense life insurance.
 
-Every lead on the platform is a real consumer who has expressed interest in health insurance coverage (ACA/Obamacare, Medicare Advantage, or Final Expense/life insurance) and provided explicit TCPA consent.
+## How it works
 
-## How It Works
+**Buyers**
+- Create an account and add prepaid credits (online card payments are not yet available; credits are added by LeadHealth on request).
+- Browse the marketplace and filter by coverage type, state and price.
+- Before purchase, a listing shows the lead score, state, coverage interest, birth year, approximate income and TCPA consent status. Name and contact details are hidden.
+- After purchase, the buyer sees the full name, phone, email, ZIP and date of birth, can keep private notes, and can export their leads to CSV.
+- Each listing is sold to one buyer and is removed from the market once bought.
 
-**For sellers (lead generators):**
-- Generate leads via the TCPA-compliant intake form at /home
-- Each lead is automatically scored 0–100 by the LeadHealth scoring engine
-- List scored leads on the marketplace at your chosen price
-- Credits are deposited to your account on each sale
+**Sellers**
+- Submit a lead with the consumer's details, attest that TCPA consent was obtained, and set an asking price ($1–$500).
+- The lead is scored automatically and listed on the marketplace.
 
-**For buyers (agents and agencies):**
-- Browse the live marketplace at /marketplace — filter by state, insurance type, score tier, and price
-- Purchase leads instantly using platform credits
-- Track purchased leads through the CRM pipeline (New → Contacted → Qualified → Converted)
-- Set price alerts to be notified when a listing drops to your target price
+## Lead score
 
-**The Exchange:**
-- Real-time pricing driven by supply, demand, and lead quality score
-- AI demand forecasting shows which states and insurance types are trending
-- Market trend data and heat maps guide buying and selling strategy
-- Ticker-style live feed of marketplace activity
+Each lead is scored 0–100 from seven factors:
 
-## Lead Scoring
+| Factor | Max points |
+|---|---|
+| TCPA consent | 25 |
+| Coverage type requested | 20 |
+| Age fit for that coverage | 15 |
+| Recency of capture | 15 |
+| State demand | 10 |
+| Income fit | 8 |
+| Record completeness | 7 |
 
-Each lead is assigned a quality score (0–100) across seven dimensions:
-
-| Factor | Max Points | Description |
-|---|---|---|
-| TCPA Consent | 25 | Binary — consented or not |
-| Interest Type | 20 | Medicare=13, Final Expense=10, ACA=8; multi-interest bonus |
-| Age Bracket | 15 | Age-to-product fit (Medicare: 65+, ACA: 26–54) |
-| Recency | 15 | <6hr=15, <24hr=13, <7d=8, <30d=5, <90d=2 |
-| State Demand | 10 | High-demand states (FL, CA, NY, TX, AZ) score higher |
-| Income Fit | 8 | ACA: 100–400% FPL; FE: $18k–90k; Medicare: low-income |
-| Completeness | 7 | DOB, income, household size, source quality, Medicaid status |
-
-**Score Tiers:**
-- PRIME (≥80) — green — highest quality, fastest to contact
-- GOOD (≥60) — amber — solid leads with good conversion potential
-- FAIR (≥40) — orange — usable but lower urgency
-- LOW (<40) — red — high-risk or incomplete data
-
-## Credit Economy
-
-LeadHealth runs on an in-platform credit system — similar to tokens on a trading platform:
-- Buyers purchase credit packages to fund marketplace transactions
-- Sellers receive credits when their listings sell
-- Full transaction ledger and credit history available in the dashboard
-- Credits can be earned through the referral program
-
-## Referral Program
-
-Agents earn bonus credits for referring new users to the platform via a unique referral code. Referral activity is tracked and rewarded automatically.
-
-## Platform Intelligence
-
-- **Demand Forecasting** — AI-generated predictions of lead demand by state and insurance type
-- **Market Trends** — State-level supply/demand and pricing data
-- **Lead Aging** — Quality scores decay automatically over time (cron job every 15 minutes) reflecting real-world urgency
-- **Price Alerts** — Watchlist triggers notify buyers when a listing hits their target price
-- **Watchlist** — Save listings to monitor before purchasing
-
-## Insurance Products Covered
-
-- **ACA / Obamacare** — Affordable Care Act marketplace plans; premium subsidy and tax credit qualification
-- **Medicare Advantage** — Medicare Part C supplemental plan leads; 65+ age group
-- **Final Expense** — Whole life/burial insurance leads; income-qualified consumers
-
-## Target Users
-
-- Independent health insurance agents
-- Insurance agency managers and team leads
-- Lead aggregators and wholesalers
-- Regional insurance carriers and FMOs (Field Marketing Organizations)
-
-## Technology Stack
-
-- Frontend: React 18, Vite, TanStack Query v5, Tailwind CSS, shadcn/ui, Recharts, Wouter
-- Backend: Express.js + TypeScript, Drizzle ORM 0.45, PostgreSQL
-- Auth: express-session + bcryptjs, session regeneration on login (CSRF/fixation hardened)
-- Scheduling: node-cron — lead quality decay every 15 minutes
-- UI: Dark terminal theme — JetBrains Mono, bg #070d1a
+Tiers: PRIME (80+), GOOD (60–79), FAIR (40–59), LOW (under 40). Lead freshness decays 2% per hour after capture, to a floor of 30%.
 
 ## Compliance
 
-All consumer leads collected on LeadHealth include:
-- Explicit TCPA consent checkbox with timestamp
-- IP address logging at submission
-- Clear disclosure language on all intake forms
-- No government affiliation — this is a private insurance solicitation platform
+- Sellers must attest to TCPA consent before a lead can be listed; the consent source is stored with the lead.
+- Leads on the Do Not Call list cannot be purchased.
+- Consumers can opt out at https://www.leadhealth.co/opt-out. Matching leads are marked Do Not Call and taken off the market.
+- LeadHealth is a private company and is not affiliated with any government agency.
 
-## Contact
+## Pages
 
-Website: https://www.leadhealth.co
+- Home: https://www.leadhealth.co/
+- Sign in / create account: https://www.leadhealth.co/login
+- Opt out: https://www.leadhealth.co/opt-out
+- Privacy policy: https://www.leadhealth.co/privacy
+- Terms of service: https://www.leadhealth.co/terms

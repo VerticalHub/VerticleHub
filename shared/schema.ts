@@ -152,7 +152,8 @@ export const leadPurchases = pgTable("lead_purchases", {
   buyerId: integer("buyer_id").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   purchaseDate: timestamp("purchase_date").defaultNow(),
-  qualityAtPurchase: integer("quality_at_purchase").notNull()
+  qualityAtPurchase: integer("quality_at_purchase").notNull(),
+  buyerNotes: text("buyer_notes"), // private to the buyer; lead.notes is admin-only
 });
 
 export const leadQualityDecay = pgTable("lead_quality_decay", {
@@ -316,3 +317,13 @@ export type InsertWatchlist        = z.infer<typeof insertWatchlistSchema>;
 export type PriceAlert             = typeof priceAlerts.$inferSelect;
 export type InsertPriceAlert       = z.infer<typeof insertPriceAlertSchema>;
 export type InsertReferralSchema   = typeof insertReferralSchema;
+
+// ── Consumer opt-out (Do Not Call) requests ─────────────────────────────────
+export const optOutRequests = pgTable("opt_out_requests", {
+  id:           serial("id").primaryKey(),
+  phoneNumber:  text("phone_number"),
+  email:        text("email"),
+  matchedLeads: integer("matched_leads").notNull().default(0),
+  createdAt:    timestamp("created_at").defaultNow(),
+});
+export type OptOutRequest = typeof optOutRequests.$inferSelect;

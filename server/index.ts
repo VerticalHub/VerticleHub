@@ -50,6 +50,13 @@ const leadCaptureLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: "Too many submissions. Try again later." },
 });
+app.use("/api/opt-out", rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { success: false, message: "Too many requests. Try again later." },
+}));
 app.use("/api/leads", (req, res, next) => (req.method === "POST" && req.path === "/" ? leadCaptureLimiter(req, res, next) : next()));
 
 if (isProduction && !process.env.SESSION_SECRET) {

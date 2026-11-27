@@ -12,20 +12,20 @@ const STEPS = [
     id: 1,
     tag: "WELCOME",
     title: "Welcome to LeadHealth",
-    subtitle: "The #1 Healthcare Lead Intelligence Platform",
+    subtitle: "The lead & call exchange for health insurance agents",
     color: "#38bdf8",
     icon: Activity,
     content: (
       <div className="space-y-3">
         <p className="text-[11px] font-mono text-[#4a6080] leading-relaxed">
-          You now have access to a real-time marketplace of verified healthcare leads — scored, ranked, and ready to work.
+          You now have access to a live marketplace of health insurance leads — scored, ranked, and ready to work.
         </p>
         <div className="grid grid-cols-2 gap-2 mt-3">
           {[
             { icon: Zap,        color: "#00d084", label: "AI Lead Scoring",     desc: "Every lead rated 0–100" },
             { icon: BarChart2,  color: "#38bdf8", label: "Live Marketplace",    desc: "Real-time order book" },
             { icon: TrendingUp, color: "#a78bfa", label: "Price Intelligence",  desc: "30-day price history" },
-            { icon: Shield,     color: "#fbbf24", label: "Verified Data",       desc: "TCPA-compliant leads" },
+            { icon: Shield,     color: "#fbbf24", label: "Consent Tracked",     desc: "TCPA consent on every listing" },
           ].map(({ icon: Icon, color, label, desc }) => (
             <div key={label} className="flex items-start gap-2.5 p-2.5 bg-[#060e1c] border border-[#1e2d4a] rounded-sm">
               <Icon className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color }} />
@@ -139,6 +139,14 @@ export default function OnboardingModal() {
     setVisible(false);
   };
 
+  // Escape closes the dialog, as keyboard users expect.
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") dismiss(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visible]);
+
   const handleCta = () => {
     const current = STEPS[step];
     if (current.ctaAction === "fund") {
@@ -165,7 +173,7 @@ export default function OnboardingModal() {
   const CtaIcon = current.ctaIcon;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Welcome to LeadHealth">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-[#020609]/80 backdrop-blur-sm" onClick={dismiss} />
 

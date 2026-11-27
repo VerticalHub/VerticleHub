@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
+import { Helmet } from "react-helmet";
 import { useMutation } from "@tanstack/react-query";
 import { Activity, Lock, User, Eye, EyeOff, AlertCircle, Gift } from "lucide-react";
 import { apiRequest, apiErrorMessage, queryClient } from "@/lib/queryClient";
@@ -19,6 +20,7 @@ export default function Login() {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref");
     if (ref) { setRefCode(ref); setTab("register"); }
+    else if (params.get("tab") === "register") setTab("register");
   }, []);
 
   const loginMutation = useMutation({
@@ -50,13 +52,18 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#070d1a] flex flex-col items-center justify-center p-4">
+      <Helmet>
+        <title>{tab === "register" ? "Create an Account | LeadHealth" : "Sign In | LeadHealth"}</title>
+        <meta name="description" content="Sign in to LeadHealth or create a free account to buy and sell ACA, Medicare and Final Expense leads." />
+        <link rel="canonical" href="https://www.leadhealth.co/login" />
+      </Helmet>
       {/* Ambient glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#0ea5e9] opacity-[0.03] rounded-full blur-3xl" />
       </div>
 
       {/* Logo */}
-      <div className="flex items-center gap-3 mb-8">
+      <Link href="/"><div className="flex items-center gap-3 mb-8 cursor-pointer" aria-label="LeadHealth home">
         <div className="w-9 h-9 rounded-sm bg-[#0ea5e9] flex items-center justify-center">
           <Activity className="w-5 h-5 text-white" />
         </div>
@@ -64,7 +71,7 @@ export default function Login() {
           <span className="text-[18px] font-bold font-mono text-white tracking-tight">LEAD</span>
           <span className="text-[18px] font-bold font-mono text-[#0ea5e9] tracking-tight">HEALTH</span>
         </h1>
-      </div>
+      </div></Link>
 
       {/* Referral banner */}
       {refCode && tab === "register" && (
@@ -72,7 +79,7 @@ export default function Login() {
           <Gift className="w-4 h-4 text-[#00d084] flex-shrink-0" />
           <div>
             <p className="text-[10px] font-mono font-bold text-[#00d084]">YOU WERE REFERRED!</p>
-            <p className="text-[9px] font-mono text-[#3a5070] mt-0.5">Sign up now — your referrer earns $25 in credits after your first purchase</p>
+            <p className="text-[10px] font-mono text-[#94b4d4] mt-0.5">Sign up now — your referrer earns $25 in credits after your first purchase</p>
           </div>
         </div>
       )}
@@ -83,7 +90,7 @@ export default function Login() {
         <div className="flex border-b border-[#1e2d4a]">
           {(["login", "register"] as const).map(t => (
             <button key={t} onClick={() => { setTab(t); setError(""); }}
-              className={`flex-1 py-3 text-[11px] font-mono tracking-widest transition-colors ${tab === t ? "text-[#38bdf8] border-b-2 border-[#38bdf8] -mb-px" : "text-[#4a6080] hover:text-[#94b4d4]"}`}>
+              className={`flex-1 py-3 text-[11px] font-mono tracking-widest transition-colors ${tab === t ? "text-[#38bdf8] border-b-2 border-[#38bdf8] -mb-px" : "text-[#7a9abf] hover:text-[#c8daf0]"}`}>
               {t === "login" ? "SIGN IN" : "REGISTER"}
             </button>
           ))}
@@ -91,13 +98,13 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">USERNAME</label>
+            <label htmlFor="login-username" className="block text-[10px] font-mono tracking-widest text-[#94b4d4] mb-1.5">USERNAME</label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#2a4060]" />
               <input
-                type="text" value={username} onChange={e => setUsername(e.target.value)}
-                placeholder="admin"
-                className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono pl-9 pr-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#1e2d4a]"
+                id="login-username" type="text" autoComplete="username" value={username} onChange={e => setUsername(e.target.value)}
+                placeholder="your username"
+                className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono pl-9 pr-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#3a5070]"
                 required
               />
             </div>
@@ -105,27 +112,28 @@ export default function Login() {
 
           {tab === "register" && (
             <div>
-              <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">EMAIL (OPTIONAL)</label>
+              <label htmlFor="login-email" className="block text-[10px] font-mono tracking-widest text-[#94b4d4] mb-1.5">EMAIL (OPTIONAL)</label>
               <input
-                type="email" value={email} onChange={e => setEmail(e.target.value)}
+                id="login-email" type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="user@example.com"
-                className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#1e2d4a]"
+                className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono px-3 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#3a5070]"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">PASSWORD</label>
+            <label htmlFor="login-password" className="block text-[10px] font-mono tracking-widest text-[#94b4d4] mb-1.5">PASSWORD</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#2a4060]" />
               <input
+                id="login-password" autoComplete={tab === "login" ? "current-password" : "new-password"}
                 type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono pl-9 pr-10 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#1e2d4a]"
+                className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono pl-9 pr-10 py-2.5 rounded-sm focus:outline-none focus:border-[#2563eb] placeholder-[#3a5070]"
                 required
               />
-              <button type="button" onClick={() => setShowPw(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#2a4060] hover:text-[#94b4d4]">
+              <button type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7a9abf] hover:text-[#c8daf0]">
                 {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -133,15 +141,15 @@ export default function Login() {
 
           {tab === "register" && (
             <div>
-              <label className="block text-[9px] font-mono tracking-widest text-[#4a6080] mb-1.5">
-                REFERRAL CODE <span className="text-[#3a5070]">(OPTIONAL — EARN YOUR REFERRER $25)</span>
+              <label htmlFor="login-refcode" className="block text-[10px] font-mono tracking-widest text-[#94b4d4] mb-1.5">
+                REFERRAL CODE <span className="text-[#7a9abf]">(OPTIONAL)</span>
               </label>
               <div className="relative">
                 <Gift className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#2a4060]" />
                 <input
-                  type="text" value={refCode} onChange={e => setRefCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. ADMIN123"
-                  className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono pl-9 pr-3 py-2.5 rounded-sm focus:outline-none focus:border-[#a78bfa] placeholder-[#1e2d4a] tracking-widest"
+                  id="login-refcode" type="text" value={refCode} onChange={e => setRefCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. JSMITH4K2"
+                  className="w-full bg-[#060e1c] border border-[#1e2d4a] text-[#94b4d4] text-[12px] font-mono pl-9 pr-3 py-2.5 rounded-sm focus:outline-none focus:border-[#a78bfa] placeholder-[#3a5070] tracking-widest"
                 />
               </div>
               {refCode && (
@@ -153,7 +161,7 @@ export default function Login() {
           {error && (
             <div className="flex items-center gap-2 bg-[#1a0808] border border-[#ff4d4d40] rounded-sm px-3 py-2">
               <AlertCircle className="w-3.5 h-3.5 text-[#ff4d4d] flex-shrink-0" />
-              <p className="text-[10px] font-mono text-[#ff4d4d]">{error}</p>
+              <p role="alert" className="text-[11px] font-mono text-[#ff8080]">{error}</p>
             </div>
           )}
 
@@ -162,12 +170,22 @@ export default function Login() {
             {isPending ? "AUTHENTICATING..." : tab === "login" ? "SIGN IN →" : "CREATE ACCOUNT →"}
           </button>
 
+          {tab === "register" && (
+            <p className="text-[10px] font-mono text-[#7a9abf] text-center leading-relaxed">
+              By creating an account you agree to the{" "}
+              <Link href="/terms"><span className="text-[#38bdf8] underline cursor-pointer">Terms</span></Link> and{" "}
+              <Link href="/privacy"><span className="text-[#38bdf8] underline cursor-pointer">Privacy Policy</span></Link>.
+            </p>
+          )}
         </form>
       </div>
 
-      <p className="mt-6 text-[9px] font-mono text-[#1e2d4a]">
-        LEADHEALTH · THE LEAD & CALL EXCHANGE FOR HEALTH INSURANCE AGENTS
-      </p>
+      <nav aria-label="Site" className="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[11px] font-mono text-[#7a9abf]">
+        <Link href="/"><span className="hover:text-white cursor-pointer">About LeadHealth</span></Link>
+        <Link href="/privacy"><span className="hover:text-white cursor-pointer">Privacy</span></Link>
+        <Link href="/terms"><span className="hover:text-white cursor-pointer">Terms</span></Link>
+        <Link href="/opt-out"><span className="hover:text-white cursor-pointer">Do not contact me</span></Link>
+      </nav>
     </div>
   );
 }

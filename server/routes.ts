@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { db } from "./db";
 import { creditTransactions, type Lead, type LeadListing } from "@shared/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { 
   leadValidationSchema, insertCreditAccountSchema,
   insertLeadListingSchema, insertDemandPredictionSchema,
@@ -202,11 +202,44 @@ function canAccessLead(role: string | undefined, owned: boolean) {
   return role === "admin" || owned;
 }
 
+// Preview of a lead for sale: enough to judge quality, nothing that identifies the person.
+function maskLead(lead: Lead) {
+  const year = lead.dateOfBirth ? lead.dateOfBirth.slice(0, 4) : null;
+  return {
+    id: lead.id,
+    firstName: lead.firstName ? lead.firstName[0] + "***" : null,
+    lastName:  lead.lastName  ? lead.lastName[0] + "***" : null,
+    email: null, phoneNumber: null, zipCode: null, notes: null, tags: null,
+    phoneLast4: lead.phoneNumber ? String(lead.phoneNumber).slice(-4) : null,
+    state: lead.state,
+    dateOfBirth: year ? `${year}-07-01` : null, // birth year only
+    annualIncome: lead.annualIncome != null ? Math.round(lead.annualIncome / 5000) * 5000 : null,
+    householdSize: lead.householdSize,
+    interestedInACA: lead.interestedInACA, interestedInMedicare: lead.interestedInMedicare,
+    interestedInFinalExpense: lead.interestedInFinalExpense,
+    hasMedicaidMedicareVA: lead.hasMedicaidMedicareVA,
+    tcpaConsent: lead.tcpaConsent, tcpaConsentSource: lead.tcpaConsentSource,
+    dnc: lead.dnc, source: lead.source, status: lead.status,
+    leadScore: lead.leadScore, agingScore: lead.agingScore, createdAt: lead.createdAt,
+    masked: true,
+  };
+}
+
+function csvCell(v: unknown): string {
+  let s = v == null ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // block spreadsheet formula injection
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function toCsv(headers: string[], rows: unknown[][]): string {
+  return [headers, ...rows].map(r => r.map(csvCell).join(",")).join("\n");
+}
+
 // ─── Routes ────────────────────────────────────────────────────────────────────
 export async function registerRoutes(app: Express): Promise<Server> {
   if (process.env.SEED_DEMO_DATA === "true") {
     await seedDatabase();
   }
+  try { await storage.ensureSchema(); } catch (e) { console.error("[schema] ensureSchema failed", e); }
   try { await applyAdminPassword(); } catch (e) { console.error("[security] Failed to apply ADMIN_PASSWORD", e); }
   startAgingJob();
 
@@ -567,6 +600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         interestedInMedicare:     formData.interests.includes("Medicare"),
         interestedInFinalExpense: formData.interests.includes("Final Expense/Life Insurance"),
         tcpaConsent: formData.tcpaConsent ?? false,
+        tcpaConsentDate: formData.tcpaConsent ? new Date() : undefined,
         tcpaConsentSource: formData.tcpaConsentSource || "web_form",
         annualIncome: formData.annualIncome,
         householdSize: formData.householdSize,
@@ -590,12 +624,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get leads" }); }
   });
 
-  app.get("/api/leads/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+  // Admins see everything. A buyer sees the full lead they bought, with their own
+  // private notes. Anyone signed in can preview a lead that is for sale, but only
+  // with contact details masked on the server.
+  app.get("/api/leads/:id", requireAuth, async (req, res) => {
     try {
-      const lead = await storage.getLeadById(parseInt(req.params.id));
+      const id = parseInt(req.params.id);
+      const userId = (req.session as any).userId;
+      const lead = await storage.getLeadById(id);
       if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
-      return res.json({ success: true, data: lead });
+      if ((req.session as any).role === "admin") return res.json({ success: true, data: lead });
+      const purchase = await storage.getPurchaseOfLead(userId, id);
+      if (purchase) return res.json({ success: true, data: { ...lead, notes: purchase.buyerNotes ?? null } });
+      if (await storage.hasActiveListing(id)) return res.json({ success: true, data: maskLead(lead) });
+      return res.status(403).json({ success: false, message: "Forbidden" });
     } catch { return res.status(500).json({ success: false, message: "Failed to get lead" }); }
+  });
+
+  // Buyers can save private notes on leads they own.
+  app.patch("/api/leads/:id", requireAuth, async (req, res, next) => {
+    if ((req.session as any).role === "admin") return next();
+    try {
+      const id = parseInt(req.params.id);
+      const purchase = await storage.getPurchaseOfLead((req.session as any).userId, id);
+      if (!purchase) return res.status(403).json({ success: false, message: "Forbidden" });
+      const notes = typeof req.body?.notes === "string" ? req.body.notes.slice(0, 5000) : null;
+      if (notes === null) return res.status(400).json({ success: false, message: "Only notes can be updated" });
+      await storage.setBuyerNotes(purchase.id, notes);
+      const lead = await storage.getLeadById(id);
+      return res.json({ success: true, data: { ...lead, notes } });
+    } catch { return res.status(500).json({ success: false, message: "Failed to update lead" }); }
   });
 
   app.patch("/api/leads/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
@@ -656,7 +714,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const owned = await storage.hasPurchasedLead((req.session as any).userId, parseInt(req.params.id));
       if (!canAccessLead((req.session as any).role, owned))
         return res.status(403).json({ success: false, message: "Forbidden" });
-      return res.json({ success: true, data: await storage.getLeadActivities(parseInt(req.params.id)) });
+      const all = await storage.getLeadActivities(parseInt(req.params.id));
+      // A lead can be resold; buyers only see their own call log.
+      const data = (req.session as any).role === "admin" ? all : all.filter(a => a.userId === (req.session as any).userId);
+      return res.json({ success: true, data });
     } catch { return res.status(500).json({ success: false, message: "Failed to get activities" }); }
   });
 
@@ -828,16 +889,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (status) allLeads = allLeads.filter(l => l.status === status);
       const headers = ["ID","First Name","Last Name","Email","Phone","Zip","State","DOB","ACA","Medicare","Final Expense","Status","Source","TCPA Consent","DNC","Aging Score","Lead Score","Notes","Captured"];
       const rows = allLeads.map(l => [
-        l.id, l.firstName, l.lastName, `"${l.email}"`, l.phoneNumber, l.zipCode, l.state,
+        l.id, l.firstName, l.lastName, l.email, l.phoneNumber, l.zipCode, l.state,
         l.dateOfBirth || "", l.interestedInACA ? "Y" : "N", l.interestedInMedicare ? "Y" : "N",
         l.interestedInFinalExpense ? "Y" : "N", l.status || "new", l.source || "web_form",
         l.tcpaConsent ? "Y" : "N", l.dnc ? "Y" : "N", l.agingScore ?? 100, l.leadScore ?? 0,
-        `"${(l.notes || "").replace(/"/g, "'")}"`,
-        new Date(l.createdAt ?? "").toISOString(),
-      ].join(","));
+        l.notes || "",
+        l.createdAt ? new Date(l.createdAt).toISOString() : "",
+      ]);
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", `attachment; filename="leads-${Date.now()}.csv"`);
-      return res.send([headers.join(","), ...rows].join("\n"));
+      return res.send(toCsv(headers, rows));
     } catch { return res.status(500).json({ success: false, message: "Export failed" }); }
   });
 
@@ -847,11 +908,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = ["ID","Lead ID","Industry","State","Price","Quality","Times Resold","Featured","Active","Listed"];
       const rows = listings.map(l => [
         l.id, l.leadId, l.industry, l.geography, l.price, l.qualityScore,
-        l.timesResold, l.featured ? "Y" : "N", l.isActive ? "Y" : "N", new Date(l.createdAt ?? "").toISOString(),
-      ].join(","));
+        l.timesResold, l.featured ? "Y" : "N", l.isActive ? "Y" : "N", l.createdAt ? new Date(l.createdAt).toISOString() : "",
+      ]);
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", `attachment; filename="listings-${Date.now()}.csv"`);
-      return res.send([headers.join(","), ...rows].join("\n"));
+      return res.send(toCsv(headers, rows));
+    } catch { return res.status(500).json({ success: false, message: "Export failed" }); }
+  });
+
+  // ── Buyer's purchased leads (full contact details) ────────────────────────
+  app.get("/api/my-leads", requireAuth, async (req, res) => {
+    try {
+      return res.json({ success: true, data: await storage.getPurchasedLeadsWithContacts((req.session as any).userId) });
+    } catch { return res.status(500).json({ success: false, message: "Failed to get your leads" }); }
+  });
+
+  app.get("/api/export/my-leads", requireAuth, async (req, res) => {
+    try {
+      const mine = await storage.getPurchasedLeadsWithContacts((req.session as any).userId);
+      const headers = ["Lead ID","First Name","Last Name","Email","Phone","Zip","State","DOB","ACA","Medicare","Final Expense","TCPA Consent","TCPA Source","DNC","Lead Score","Price Paid","Purchased","My Notes"];
+      const rows = mine.map(l => [
+        l.id, l.firstName, l.lastName, l.email, l.phoneNumber, l.zipCode, l.state, l.dateOfBirth || "",
+        l.interestedInACA ? "Y" : "N", l.interestedInMedicare ? "Y" : "N", l.interestedInFinalExpense ? "Y" : "N",
+        l.tcpaConsent ? "Y" : "N", l.tcpaConsentSource || "", l.dnc ? "Y" : "N", l.leadScore ?? "",
+        l.pricePaid, l.purchaseDate ? new Date(l.purchaseDate).toISOString() : "", l.buyerNotes || "",
+      ]);
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="my-leads-${Date.now()}.csv"`);
+      return res.send(toCsv(headers, rows));
     } catch { return res.status(500).json({ success: false, message: "Export failed" }); }
   });
 
@@ -1260,6 +1344,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       return res.json({ success: true });
     } catch { return res.status(500).json({ success: false, message: "Failed to review submission" }); }
+  });
+
+  // ── Consumer opt-out (public) ─────────────────────────────────────────────
+  // Always answers the same way, so it can't be used to check whether someone is in the database.
+  app.post("/api/opt-out", async (req, res) => {
+    const parsed = z.object({
+      phoneNumber: z.string().optional().transform(v => (v ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "")),
+      email: z.string().trim().max(254).optional().transform(v => v || ""),
+    }).safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ success: false, message: "Invalid request" });
+    const { phoneNumber, email } = parsed.data;
+    const phoneOk = /^\d{10}$/.test(phoneNumber);
+    const emailOk = email !== "" && z.string().email().safeParse(email).success;
+    if (!phoneOk && !emailOk)
+      return res.status(400).json({ success: false, message: "Enter a 10-digit phone number or a valid email address." });
+    try {
+      await storage.recordOptOut(phoneOk ? phoneNumber : null, emailOk ? email : null);
+      return res.json({ success: true, message: "Your request has been recorded. We will stop contacting you and remove your information from sale." });
+    } catch { return res.status(500).json({ success: false, message: "Could not record your request. Please try again." }); }
+  });
+
+  app.get("/api/admin/opt-outs", requireAuth, requireRole(["admin"]), async (_req, res) => {
+    try { return res.json({ success: true, data: await storage.getOptOutRequests() }); }
+    catch { return res.status(500).json({ success: false, message: "Failed to get opt-out requests" }); }
+  });
+
+  // ── Health check (for uptime monitors) ────────────────────────────────────
+  app.get("/api/health", async (_req, res) => {
+    try {
+      await db.execute(sql`select 1`);
+      return res.json({ status: "ok" });
+    } catch { return res.status(503).json({ status: "unavailable" }); }
   });
 
   // Unknown API routes get a JSON 404 instead of falling through to the SPA.
