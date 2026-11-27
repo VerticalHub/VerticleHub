@@ -4,14 +4,14 @@ import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { db } from "./db";
 import { creditTransactions, type Lead, type LeadListing } from "@shared/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { 
   leadValidationSchema, insertCreditAccountSchema,
   insertLeadListingSchema, insertDemandPredictionSchema,
   insertMarketTrendSchema, insertLeadActivitySchema,
   insertPriceAlertSchema,
 } from "@shared/schema";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { startAgingJob } from "./jobs/ageLeads";
 import { computeLeadScore, scoreLabel, scoreColor } from "./scoring";
 import { requireAuth, requireRole } from "./middleware/auth";
@@ -147,12 +147,133 @@ async function seedDatabase() {
   }
 }
 
+// ─── Security helpers ──────────────────────────────────────────────────────────
+const isProduction = process.env.NODE_ENV === "production";
+
+// Seeded demo passwords are public (they were shown on the login page), so they
+// must never authenticate in production.
+const DEFAULT_PASSWORDS = new Set(["admin123", "agent123"]);
+
+// If ADMIN_PASSWORD is set, make it the admin account's password at startup.
+async function applyAdminPassword() {
+  const newPassword = process.env.ADMIN_PASSWORD;
+  if (!newPassword) return;
+  if (newPassword.length < 12) {
+    console.error("[security] ADMIN_PASSWORD must be at least 12 characters; ignoring it");
+    return;
+  }
+  const admin = await storage.getUserByUsername("admin");
+  if (!admin) return;
+  if (await bcrypt.compare(newPassword, admin.password)) return;
+  await storage.updateUserPassword(admin.id, await bcrypt.hash(newPassword, 10));
+  console.log("[security] Admin password updated from ADMIN_PASSWORD");
+}
+
+const registerSchema = z.object({
+  username: z.string().trim().min(3, "Username must be 3–32 characters").max(32, "Username must be 3–32 characters").regex(/^[a-zA-Z0-9_.-]+$/, "Username may only contain letters, numbers, _ . -"),
+  password: z.string().min(8, "Password must be at least 8 characters").max(128),
+  email:    z.string().trim().email().max(254).optional().or(z.literal("")),
+  refCode:  z.string().trim().max(32).optional(),
+});
+
+const REFERRAL_BONUS = "25.00";
+
+const submissionSchema = z.object({
+  firstName:   z.string().trim().min(1).max(100),
+  lastName:    z.string().trim().min(1).max(100),
+  email:       z.string().trim().email().max(254),
+  phoneNumber: z.string().transform(v => v.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "")).pipe(z.string().regex(/^\d{10}$/, "Phone must be 10 digits")),
+  zipCode:     z.string().regex(/^\d{5}$/, "ZIP must be 5 digits"),
+  state:       z.string().trim().toUpperCase().pipe(z.string().regex(/^[A-Z]{2}$/, "State must be a 2-letter code")),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")).transform(v => v || undefined),
+  interestedInACA:          z.boolean().optional(),
+  interestedInMedicare:     z.boolean().optional(),
+  interestedInFinalExpense: z.boolean().optional(),
+  // Sellers must attest the consumer gave TCPA consent; leads without it can't be sold.
+  tcpaConsent:   z.literal(true, { errorMap: () => ({ message: "TCPA consent is required to list a lead" }) }),
+  annualIncome:  z.coerce.number().int().min(0).max(10_000_000).optional(),
+  householdSize: z.coerce.number().int().min(1).max(20).optional(),
+  askingPrice:   z.coerce.number().min(1).max(500).transform(n => n.toFixed(2)),
+  industry:      z.string().trim().min(1).max(50),
+  sellerNotes:   z.string().max(1000).optional(),
+});
+
+function canAccessLead(role: string | undefined, owned: boolean) {
+  return role === "admin" || owned;
+}
+
+// Preview of a lead for sale: enough to judge quality, nothing that identifies the person.
+function maskLead(lead: Lead) {
+  const year = lead.dateOfBirth ? lead.dateOfBirth.slice(0, 4) : null;
+  return {
+    id: lead.id,
+    firstName: lead.firstName ? lead.firstName[0] + "***" : null,
+    lastName:  lead.lastName  ? lead.lastName[0] + "***" : null,
+    email: null, phoneNumber: null, zipCode: null, notes: null, tags: null,
+    phoneLast4: lead.phoneNumber ? String(lead.phoneNumber).slice(-4) : null,
+    state: lead.state,
+    dateOfBirth: year ? `${year}-07-01` : null, // birth year only
+    annualIncome: lead.annualIncome != null ? Math.round(lead.annualIncome / 5000) * 5000 : null,
+    householdSize: lead.householdSize,
+    interestedInACA: lead.interestedInACA, interestedInMedicare: lead.interestedInMedicare,
+    interestedInFinalExpense: lead.interestedInFinalExpense,
+    hasMedicaidMedicareVA: lead.hasMedicaidMedicareVA,
+    tcpaConsent: lead.tcpaConsent, tcpaConsentSource: lead.tcpaConsentSource,
+    dnc: lead.dnc, source: lead.source, status: lead.status,
+    leadScore: lead.leadScore, agingScore: lead.agingScore, createdAt: lead.createdAt,
+    masked: true,
+  };
+}
+
+function csvCell(v: unknown): string {
+  let s = v == null ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // block spreadsheet formula injection
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function toCsv(headers: string[], rows: unknown[][]): string {
+  return [headers, ...rows].map(r => r.map(csvCell).join(",")).join("\n");
+}
+
 // ─── Routes ────────────────────────────────────────────────────────────────────
 export async function registerRoutes(app: Express): Promise<Server> {
   if (process.env.SEED_DEMO_DATA === "true") {
     await seedDatabase();
   }
+  try { await storage.ensureSchema(); } catch (e) { console.error("[schema] ensureSchema failed", e); }
+  try { await applyAdminPassword(); } catch (e) { console.error("[security] Failed to apply ADMIN_PASSWORD", e); }
   startAgingJob();
+
+  // Pays a referrer once, when the referred user makes their first purchase.
+  async function awardReferralIfPending(buyerId: number) {
+    const ref = await storage.claimPendingReferral(buyerId);
+    if (!ref) return;
+    let account = await storage.getCreditAccount(ref.referrerId);
+    if (!account) account = await storage.createCreditAccount({ userId: ref.referrerId, balance: "0.00", totalPurchased: "0.00" });
+    await storage.updateCreditBalance(ref.referrerId, ref.creditAwarded);
+    await storage.addCreditTransaction({ userId: ref.referrerId, type: "purchase", amount: ref.creditAwarded, description: "Referral bonus — referred user made their first purchase" });
+    await storage.createAlert({ userId: ref.referrerId, type: "purchase", title: "REFERRAL BONUS EARNED", body: `A user you referred made their first purchase. $${ref.creditAwarded} added to your account!`, leadId: null, read: false });
+  }
+
+  // Buys one listing. Debit and listing claim are each atomic, so concurrent
+  // requests can neither overdraw a balance nor sell the same listing twice.
+  async function buyListing(buyerId: number, listingId: number, description: string):
+    Promise<{ ok: true; purchase: any; listing: LeadListing } | { ok: false; status: number; reason: string }> {
+    const listing = await storage.getLeadListingById(listingId);
+    if (!listing?.isActive) return { ok: false, status: 404, reason: "Listing not available" };
+    if (listing.sellerId === buyerId) return { ok: false, status: 400, reason: "You cannot buy your own listing" };
+    const lead = await storage.getLeadById(listing.leadId);
+    if (lead?.dnc) return { ok: false, status: 403, reason: "Lead is on DNC registry" };
+    if (await storage.hasPurchasedLead(buyerId, listing.leadId)) return { ok: false, status: 409, reason: "You already own this lead" };
+    if (!(await storage.debitIfSufficient(buyerId, listing.price))) return { ok: false, status: 400, reason: "Insufficient credits" };
+    if (!(await storage.claimListing(listingId))) {
+      await storage.updateCreditBalance(buyerId, listing.price); // refund
+      return { ok: false, status: 404, reason: "Listing not available" };
+    }
+    const purchase = await storage.purchaseLead({ listingId, buyerId, price: listing.price, qualityAtPurchase: listing.qualityScore });
+    await storage.addCreditTransaction({ userId: buyerId, type: "spend", amount: listing.price, description });
+    await awardReferralIfPending(buyerId).catch(e => console.error("[referral]", e));
+    return { ok: true, purchase, listing };
+  }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   app.post("/api/auth/login", async (req, res) => {
@@ -163,6 +284,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) return res.status(401).json({ success: false, message: "Invalid credentials" });
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) return res.status(401).json({ success: false, message: "Invalid credentials" });
+      if (isProduction && DEFAULT_PASSWORDS.has(password))
+        return res.status(403).json({ success: false, message: "This account still uses a default password. Ask an administrator to reset it." });
       await new Promise<void>((resolve, reject) =>
         req.session.regenerate((err) => (err ? reject(err) : resolve()))
       );
@@ -174,25 +297,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { username, password, email, refCode } = req.body;
-      if (!username || !password) return res.status(400).json({ success: false, message: "Username and password required" });
+      const parsed = registerSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ success: false, message: parsed.error.errors[0]?.message ?? "Invalid registration data" });
+      const { username, password, email, refCode } = parsed.data;
       const existing = await storage.getUserByUsername(username);
       if (existing) return res.status(409).json({ success: false, message: "Username already taken" });
       const hash = await bcrypt.hash(password, 10);
       // Generate a unique referral code for this new user
       const newCode = username.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) + Math.random().toString(36).slice(2, 5).toUpperCase();
       const user = await storage.createUser({ username, password: hash, email: email || null, role: "agent", referralCode: newCode });
-      // Credit the referrer $25 if a valid referral code was provided
+      // Record the referral as pending. The referrer is paid when this user makes
+      // their first purchase, so throwaway sign-ups can't be farmed for credit.
       if (refCode) {
         const referrer = await storage.getUserByReferralCode(refCode);
         if (referrer && referrer.id !== user.id) {
-          await storage.createReferral({ referrerId: referrer.id, refereeId: user.id, code: refCode, creditAwarded: "25.00", status: "completed" });
-          // Credit $25 to the referrer's account
-          let account = await storage.getCreditAccount(referrer.id);
-          if (!account) account = await storage.createCreditAccount({ userId: referrer.id, balance: "0.00", totalPurchased: "0.00" });
-          await storage.updateCreditBalance(referrer.id, "25.00");
-          await storage.addCreditTransaction({ userId: referrer.id, type: "purchase", amount: "25.00", description: `Referral bonus — ${username} signed up with your code` });
-          await storage.createAlert({ userId: referrer.id, type: "purchase", title: "REFERRAL BONUS EARNED", body: `${username} registered using your referral code. $25.00 added to your account!`, leadId: null, read: false });
+          await storage.createReferral({ referrerId: referrer.id, refereeId: user.id, code: refCode, creditAwarded: REFERRAL_BONUS, status: "pending" });
+          await storage.createAlert({ userId: referrer.id, type: "purchase", title: "NEW REFERRAL", body: `${username} signed up with your code. You'll earn $${REFERRAL_BONUS} when they make their first purchase.`, leadId: null, read: false });
         }
       }
       await new Promise<void>((resolve, reject) =>
@@ -269,7 +389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const referee = await storage.getUser(r.refereeId).catch(() => null);
         return { ...r, refereeName: referee?.username ?? null };
       }));
-      const totalEarned = refs.reduce((s, r) => s + parseFloat(r.creditAwarded as string), 0);
+      const totalEarned = refs.filter(r => r.status === "completed").reduce((s, r) => s + parseFloat(r.creditAwarded as string), 0);
       return res.json({ success: true, data: { code, referrals: enriched, totalEarned: +totalEarned.toFixed(2) } });
     } catch (e) { return res.status(500).json({ success: false, message: "Failed to get referrals" }); }
   });
@@ -480,6 +600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         interestedInMedicare:     formData.interests.includes("Medicare"),
         interestedInFinalExpense: formData.interests.includes("Final Expense/Life Insurance"),
         tcpaConsent: formData.tcpaConsent ?? false,
+        tcpaConsentDate: formData.tcpaConsent ? new Date() : undefined,
         tcpaConsentSource: formData.tcpaConsentSource || "web_form",
         annualIncome: formData.annualIncome,
         householdSize: formData.householdSize,
@@ -503,12 +624,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get leads" }); }
   });
 
-  app.get("/api/leads/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+  // Admins see everything. A buyer sees the full lead they bought, with their own
+  // private notes. Anyone signed in can preview a lead that is for sale, but only
+  // with contact details masked on the server.
+  app.get("/api/leads/:id", requireAuth, async (req, res) => {
     try {
-      const lead = await storage.getLeadById(parseInt(req.params.id));
+      const id = parseInt(req.params.id);
+      const userId = (req.session as any).userId;
+      const lead = await storage.getLeadById(id);
       if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
-      return res.json({ success: true, data: lead });
+      if ((req.session as any).role === "admin") return res.json({ success: true, data: lead });
+      const purchase = await storage.getPurchaseOfLead(userId, id);
+      if (purchase) return res.json({ success: true, data: { ...lead, notes: purchase.buyerNotes ?? null } });
+      if (await storage.hasActiveListing(id)) return res.json({ success: true, data: maskLead(lead) });
+      return res.status(403).json({ success: false, message: "Forbidden" });
     } catch { return res.status(500).json({ success: false, message: "Failed to get lead" }); }
+  });
+
+  // Buyers can save private notes on leads they own.
+  app.patch("/api/leads/:id", requireAuth, async (req, res, next) => {
+    if ((req.session as any).role === "admin") return next();
+    try {
+      const id = parseInt(req.params.id);
+      const purchase = await storage.getPurchaseOfLead((req.session as any).userId, id);
+      if (!purchase) return res.status(403).json({ success: false, message: "Forbidden" });
+      const notes = typeof req.body?.notes === "string" ? req.body.notes.slice(0, 5000) : null;
+      if (notes === null) return res.status(400).json({ success: false, message: "Only notes can be updated" });
+      await storage.setBuyerNotes(purchase.id, notes);
+      const lead = await storage.getLeadById(id);
+      return res.json({ success: true, data: { ...lead, notes } });
+    } catch { return res.status(500).json({ success: false, message: "Failed to update lead" }); }
   });
 
   app.patch("/api/leads/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
@@ -566,13 +711,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ── CRM Activities ────────────────────────────────────────────────────────
   app.get("/api/leads/:id/activities", requireAuth, async (req, res) => {
     try {
-      return res.json({ success: true, data: await storage.getLeadActivities(parseInt(req.params.id)) });
+      const owned = await storage.hasPurchasedLead((req.session as any).userId, parseInt(req.params.id));
+      if (!canAccessLead((req.session as any).role, owned))
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      const all = await storage.getLeadActivities(parseInt(req.params.id));
+      // A lead can be resold; buyers only see their own call log.
+      const data = (req.session as any).role === "admin" ? all : all.filter(a => a.userId === (req.session as any).userId);
+      return res.json({ success: true, data });
     } catch { return res.status(500).json({ success: false, message: "Failed to get activities" }); }
   });
 
   app.post("/api/leads/:id/activities", requireAuth, async (req, res) => {
     try {
       const sessionUserId = (req.session as any).userId;
+      const owned = await storage.hasPurchasedLead(sessionUserId, parseInt(req.params.id));
+      if (!canAccessLead((req.session as any).role, owned))
+        return res.status(403).json({ success: false, message: "Forbidden" });
       const data = insertLeadActivitySchema.parse({ ...req.body, leadId: parseInt(req.params.id), userId: sessionUserId });
       const activity = await storage.createLeadActivity(data);
       if (data.disposition === "converted") {
@@ -735,16 +889,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (status) allLeads = allLeads.filter(l => l.status === status);
       const headers = ["ID","First Name","Last Name","Email","Phone","Zip","State","DOB","ACA","Medicare","Final Expense","Status","Source","TCPA Consent","DNC","Aging Score","Lead Score","Notes","Captured"];
       const rows = allLeads.map(l => [
-        l.id, l.firstName, l.lastName, `"${l.email}"`, l.phoneNumber, l.zipCode, l.state,
+        l.id, l.firstName, l.lastName, l.email, l.phoneNumber, l.zipCode, l.state,
         l.dateOfBirth || "", l.interestedInACA ? "Y" : "N", l.interestedInMedicare ? "Y" : "N",
         l.interestedInFinalExpense ? "Y" : "N", l.status || "new", l.source || "web_form",
         l.tcpaConsent ? "Y" : "N", l.dnc ? "Y" : "N", l.agingScore ?? 100, l.leadScore ?? 0,
-        `"${(l.notes || "").replace(/"/g, "'")}"`,
-        new Date(l.createdAt ?? "").toISOString(),
-      ].join(","));
+        l.notes || "",
+        l.createdAt ? new Date(l.createdAt).toISOString() : "",
+      ]);
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", `attachment; filename="leads-${Date.now()}.csv"`);
-      return res.send([headers.join(","), ...rows].join("\n"));
+      return res.send(toCsv(headers, rows));
     } catch { return res.status(500).json({ success: false, message: "Export failed" }); }
   });
 
@@ -754,11 +908,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = ["ID","Lead ID","Industry","State","Price","Quality","Times Resold","Featured","Active","Listed"];
       const rows = listings.map(l => [
         l.id, l.leadId, l.industry, l.geography, l.price, l.qualityScore,
-        l.timesResold, l.featured ? "Y" : "N", l.isActive ? "Y" : "N", new Date(l.createdAt ?? "").toISOString(),
-      ].join(","));
+        l.timesResold, l.featured ? "Y" : "N", l.isActive ? "Y" : "N", l.createdAt ? new Date(l.createdAt).toISOString() : "",
+      ]);
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", `attachment; filename="listings-${Date.now()}.csv"`);
-      return res.send([headers.join(","), ...rows].join("\n"));
+      return res.send(toCsv(headers, rows));
+    } catch { return res.status(500).json({ success: false, message: "Export failed" }); }
+  });
+
+  // ── Buyer's purchased leads (full contact details) ────────────────────────
+  app.get("/api/my-leads", requireAuth, async (req, res) => {
+    try {
+      return res.json({ success: true, data: await storage.getPurchasedLeadsWithContacts((req.session as any).userId) });
+    } catch { return res.status(500).json({ success: false, message: "Failed to get your leads" }); }
+  });
+
+  app.get("/api/export/my-leads", requireAuth, async (req, res) => {
+    try {
+      const mine = await storage.getPurchasedLeadsWithContacts((req.session as any).userId);
+      const headers = ["Lead ID","First Name","Last Name","Email","Phone","Zip","State","DOB","ACA","Medicare","Final Expense","TCPA Consent","TCPA Source","DNC","Lead Score","Price Paid","Purchased","My Notes"];
+      const rows = mine.map(l => [
+        l.id, l.firstName, l.lastName, l.email, l.phoneNumber, l.zipCode, l.state, l.dateOfBirth || "",
+        l.interestedInACA ? "Y" : "N", l.interestedInMedicare ? "Y" : "N", l.interestedInFinalExpense ? "Y" : "N",
+        l.tcpaConsent ? "Y" : "N", l.tcpaConsentSource || "", l.dnc ? "Y" : "N", l.leadScore ?? "",
+        l.pricePaid, l.purchaseDate ? new Date(l.purchaseDate).toISOString() : "", l.buyerNotes || "",
+      ]);
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="my-leads-${Date.now()}.csv"`);
+      return res.send(toCsv(headers, rows));
     } catch { return res.status(500).json({ success: false, message: "Export failed" }); }
   });
 
@@ -782,12 +959,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch { return res.status(500).json({ success: false, message: "Failed to get packages" }); }
   });
 
+  // There is no payment processor yet, so self-service deposits would mint free
+  // credit. Only admins can add credit, after taking payment outside the app.
   app.post("/api/credits/purchase", requireAuth, async (req, res) => {
+    if ((req.session as any).role !== "admin")
+      return res.status(403).json({ success: false, message: "Online payments are not available yet. Contact support to add credits to your account." });
     try {
-      const userId = (req.session as any).userId;
-      const { packageId, amount } = req.body;
+      const parsed = z.object({
+        userId: z.coerce.number().int().positive().optional(),
+        amount: z.coerce.number().positive().max(100_000).transform(n => n.toFixed(2)),
+        packageId: z.coerce.number().int().optional(),
+      }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ success: false, message: "Invalid amount" });
+      const userId = parsed.data.userId ?? (req.session as any).userId;
+      const { amount, packageId } = parsed.data;
+      if (!(await storage.getUser(userId))) return res.status(404).json({ success: false, message: "User not found" });
+      if (!(await storage.getCreditAccount(userId))) await storage.createCreditAccount({ userId, balance: "0.00", totalPurchased: "0.00" });
       await storage.updateCreditBalance(userId, amount);
-      await storage.addCreditTransaction({ userId, type: "purchase", amount, description: `Deposit — Package #${packageId}` });
+      await storage.addCreditTransaction({ userId, type: "purchase", amount, description: packageId ? `Deposit — Package #${packageId}` : "Deposit — added by admin" });
       await storage.createAlert({ userId, type: "purchase", title: "FUNDS DEPOSITED", body: `$${amount} added to your account`, leadId: null, read: false });
       return res.json({ success: true, message: "Credits deposited" });
     } catch { return res.status(500).json({ success: false, message: "Failed to deposit credits" }); }
@@ -881,18 +1070,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const listingId = parseInt(req.params.id);
       const buyerId = (req.session as any).userId;
-      const listing = await storage.getLeadListingById(listingId);
-      if (!listing?.isActive) return res.status(404).json({ success: false, message: "Listing not available" });
-      const lead = await storage.getLeadById(listing.leadId);
-      if (lead?.dnc) return res.status(403).json({ success: false, message: "Lead is on DNC registry" });
-      const alreadyOwned = await storage.hasPurchasedLead(buyerId, listing.leadId);
-      if (alreadyOwned) return res.status(409).json({ success: false, message: "You already own this lead" });
-      const account = await storage.getCreditAccount(buyerId);
-      if (!account || parseFloat(account.balance) < parseFloat(listing.price))
-        return res.status(400).json({ success: false, message: "Insufficient credits" });
-      const purchase = await storage.purchaseLead({ listingId, buyerId, price: listing.price, qualityAtPurchase: listing.qualityScore });
-      await storage.updateCreditBalance(buyerId, `-${listing.price}`);
-      await storage.addCreditTransaction({ userId: buyerId, type: "spend", amount: listing.price, description: `Purchased lead listing #${listingId}` });
+      const result = await buyListing(buyerId, listingId, `Purchased lead listing #${listingId}`);
+      if (!result.ok) return res.status(result.status).json({ success: false, message: result.reason });
+      const { listing, purchase } = result;
       await storage.createAlert({ userId: buyerId, type: "purchase", title: "ORDER FILLED", body: `Lead #${listing.leadId} acquired — $${listing.price} debited`, leadId: listing.leadId, read: false });
       const updated = await storage.getCreditAccount(buyerId);
       if (updated && parseFloat(updated.balance) < 100) {
@@ -910,29 +1090,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!Array.isArray(listingIds) || !listingIds.length)
         return res.status(400).json({ success: false, message: "No listings selected" });
 
+      if (listingIds.length > 100)
+        return res.status(400).json({ success: false, message: "Too many listings in one order (max 100)" });
+
       const account = await storage.getCreditAccount(buyerId);
       if (!account) return res.status(404).json({ success: false, message: "Account not found" });
 
       const results: any[] = [];
       const errors: any[]  = [];
 
-      for (const listingId of listingIds) {
-        const listing = await storage.getLeadListingById(listingId);
-        if (!listing?.isActive) { errors.push({ listingId, reason: "Not available" }); continue; }
-        const lead = await storage.getLeadById(listing.leadId);
-        if (lead?.dnc)            { errors.push({ listingId, reason: "DNC" }); continue; }
-        const alreadyOwned = await storage.hasPurchasedLead(buyerId, listing.leadId);
-        if (alreadyOwned)         { errors.push({ listingId, reason: "Already owned" }); continue; }
-        if (parseFloat(account.balance) < parseFloat(listing.price))
-          { errors.push({ listingId, reason: "Insufficient credits" }); continue; }
-
-        const purchase = await storage.purchaseLead({ listingId, buyerId, price: listing.price, qualityAtPurchase: listing.qualityScore });
-        await storage.updateCreditBalance(buyerId, `-${listing.price}`);
-        await storage.addCreditTransaction({ userId: buyerId, type: "spend", amount: listing.price, description: `Bulk purchase — listing #${listingId}` });
-        // refresh balance
-        const refreshed = await storage.getCreditAccount(buyerId);
-        if (refreshed) account.balance = refreshed.balance;
-        results.push(purchase);
+      for (const raw of listingIds) {
+        const listingId = Number(raw);
+        if (!Number.isInteger(listingId)) { errors.push({ listingId: raw, reason: "Invalid listing" }); continue; }
+        const result = await buyListing(buyerId, listingId, `Bulk purchase — listing #${listingId}`);
+        if (result.ok) results.push(result.purchase);
+        else errors.push({ listingId, reason: result.reason });
       }
 
       if (results.length > 0) {
@@ -1078,8 +1250,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/submissions", requireAuth, async (req, res) => {
     try {
       const sessionUserId = (req.session as any).userId;
+      const parsed = submissionSchema.safeParse(req.body);
+      if (!parsed.success)
+        return res.status(400).json({ success: false, message: parsed.error.errors[0]?.message ?? "Invalid submission", errors: parsed.error.errors });
       // Auto-approve: create submission, score it, and list it immediately
-      const sub = await storage.createSubmission({ ...req.body, submittedBy: sessionUserId, status: "approved" });
+      const sub = await storage.createSubmission({ ...parsed.data, submittedBy: sessionUserId, status: "approved" });
       const lead = await storage.createLead({
         firstName: sub.firstName, lastName: sub.lastName,
         email: sub.email, phoneNumber: sub.phoneNumber,
@@ -1089,6 +1264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         interestedInMedicare: sub.interestedInMedicare ?? false,
         interestedInFinalExpense: sub.interestedInFinalExpense ?? false,
         tcpaConsent: sub.tcpaConsent ?? false,
+        tcpaConsentSource: "seller_attestation",
         annualIncome: sub.annualIncome ?? undefined,
         householdSize: sub.householdSize ?? undefined,
         source: "seller_portal",
@@ -1132,7 +1308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { status, adminNotes } = req.body;
       if (!["approved", "rejected"].includes(status))
         return res.status(400).json({ success: false, message: "Invalid status" });
-      await storage.updateSubmissionStatus(id, status, adminNotes || "", 1);
+      await storage.updateSubmissionStatus(id, status, adminNotes || "", (req.session as any).userId);
 
       if (status === "approved") {
         const subs = await storage.getAllSubmissions();
@@ -1169,6 +1345,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ success: true });
     } catch { return res.status(500).json({ success: false, message: "Failed to review submission" }); }
   });
+
+  // ── Consumer opt-out (public) ─────────────────────────────────────────────
+  // Always answers the same way, so it can't be used to check whether someone is in the database.
+  app.post("/api/opt-out", async (req, res) => {
+    const parsed = z.object({
+      phoneNumber: z.string().optional().transform(v => (v ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "")),
+      email: z.string().trim().max(254).optional().transform(v => v || ""),
+    }).safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ success: false, message: "Invalid request" });
+    const { phoneNumber, email } = parsed.data;
+    const phoneOk = /^\d{10}$/.test(phoneNumber);
+    const emailOk = email !== "" && z.string().email().safeParse(email).success;
+    if (!phoneOk && !emailOk)
+      return res.status(400).json({ success: false, message: "Enter a 10-digit phone number or a valid email address." });
+    try {
+      await storage.recordOptOut(phoneOk ? phoneNumber : null, emailOk ? email : null);
+      return res.json({ success: true, message: "Your request has been recorded. We will stop contacting you and remove your information from sale." });
+    } catch { return res.status(500).json({ success: false, message: "Could not record your request. Please try again." }); }
+  });
+
+  app.get("/api/admin/opt-outs", requireAuth, requireRole(["admin"]), async (_req, res) => {
+    try { return res.json({ success: true, data: await storage.getOptOutRequests() }); }
+    catch { return res.status(500).json({ success: false, message: "Failed to get opt-out requests" }); }
+  });
+
+  // ── Health check (for uptime monitors) ────────────────────────────────────
+  app.get("/api/health", async (_req, res) => {
+    try {
+      await db.execute(sql`select 1`);
+      return res.json({ status: "ok" });
+    } catch { return res.status(503).json({ status: "unavailable" }); }
+  });
+
+  // Unknown API routes get a JSON 404 instead of falling through to the SPA.
+  app.use("/api", (_req, res) => res.status(404).json({ success: false, message: "Not found" }));
 
   const httpServer = createServer(app);
   return httpServer;

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import MyLeads from "@/pages/MyLeads";
 import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import {
@@ -36,7 +37,7 @@ function relTime(dateStr: string) {
 
 type Tab = "capture" | "pipeline" | "analytics" | "crm";
 
-export default function Leads() {
+function AdminLeads() {
   const [tab, setTab] = useState<Tab>("pipeline");
   const [liveFeed, setLiveFeed] = useState<any[]>([]);
   const feedRef = useRef<HTMLDivElement>(null);
@@ -522,4 +523,15 @@ export default function Leads() {
       </main>
     </div>
   );
+}
+
+// Admins get the full lead operations center; everyone else sees the leads they bought.
+export default function Leads() {
+  const { data: meResp, isLoading } = useQuery<any>({
+    queryKey: ["/api/auth/me"],
+    queryFn: () => fetch("/api/auth/me").then(r => r.json()),
+    staleTime: 60_000,
+  });
+  if (isLoading) return <div className="min-h-screen bg-[#070d1a]" />;
+  return meResp?.data?.role === "admin" ? <AdminLeads /> : <MyLeads />;
 }

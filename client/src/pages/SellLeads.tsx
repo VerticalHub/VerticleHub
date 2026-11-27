@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, apiErrorMessage } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
 import {
@@ -67,7 +67,7 @@ export default function SellLeads() {
       const tier = score >= 80 ? "PRIME" : score >= 60 ? "GOOD" : score >= 40 ? "FAIR" : score != null ? "LOW" : null;
       toast({ title: "Lead listed instantly!", description: tier ? `Your lead scored ${score}/100 (${tier}) and is now live on the marketplace.` : "Your lead is now live on the marketplace.", variant: "success" as any });
     },
-    onError: () => toast({ title: "Submission failed", description: "Please check your details and try again.", variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Submission failed", description: apiErrorMessage(err, "Please check your details and try again."), variant: "destructive" }),
   });
 
   const set = (k: string, v: any) => {
@@ -86,6 +86,7 @@ export default function SellLeads() {
     if (!form.askingPrice || parseFloat(form.askingPrice) < 1) e.askingPrice = "Enter a price ≥ $1";
     if (!form.interestedInACA && !form.interestedInMedicare && !form.interestedInFinalExpense)
       e.interests = "Select at least one interest";
+    if (!form.tcpaConsent) e.tcpaConsent = "TCPA consent is required to list a lead";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -93,12 +94,10 @@ export default function SellLeads() {
   const handleSubmit = () => {
     if (!validate()) return;
     submitMutation.mutate({
-      submittedBy: 1,
       ...form,
       annualIncome:  form.annualIncome  ? parseInt(form.annualIncome)  : undefined,
       householdSize: form.householdSize ? parseInt(form.householdSize) : undefined,
       askingPrice: parseFloat(form.askingPrice).toFixed(2),
-      status: "pending",
     });
   };
 
@@ -233,6 +232,7 @@ export default function SellLeads() {
                     <span className="text-[9px] font-mono text-[#7a9abf] ml-2">Seller certifies written consent was obtained and documented</span>
                   </div>
                 </label>
+                {errors.tcpaConsent && <p className="text-[9px] font-mono text-[#ff4d4d]">{errors.tcpaConsent}</p>}
               </div>
             </div>
 

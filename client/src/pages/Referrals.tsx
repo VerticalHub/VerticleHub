@@ -35,7 +35,7 @@ export default function Referrals() {
     navigator.clipboard.writeText(refLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast({ title: "Link copied!", description: "Share it anywhere — you earn $25 per signup.", variant: "success" as any });
+    toast({ title: "Link copied!", description: "Share it anywhere — you earn $25 when each referral makes their first purchase.", variant: "success" as any });
   };
 
   return (
@@ -47,7 +47,7 @@ export default function Referrals() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-[13px] font-mono font-bold text-[#c8daf0] tracking-widest">REFERRAL PROGRAM</h1>
-            <p className="text-[10px] font-mono text-[#3a5070] mt-0.5">Earn $25 in credits for every new user you refer</p>
+            <p className="text-[10px] font-mono text-[#3a5070] mt-0.5">Earn $25 in credits for every referred user who makes a purchase</p>
           </div>
           <div className="flex items-center gap-1.5 border border-[#1e2d4a] rounded-sm px-3 py-1.5 bg-[#0d1526]">
             <Gift className="w-3.5 h-3.5 text-[#a78bfa]" />
@@ -123,7 +123,7 @@ export default function Referrals() {
               {[
                 { step: "01", title: "SHARE YOUR CODE",    desc: "Send your unique referral code or link to a colleague",    color: "text-[#38bdf8]" },
                 { step: "02", title: "THEY REGISTER",      desc: "New user signs up and enters your code during registration", color: "text-[#a78bfa]" },
-                { step: "03", title: "YOU EARN $25",       desc: "$25 in credits is instantly added to your account balance",  color: "text-[#00d084]" },
+                { step: "03", title: "YOU EARN $25",       desc: "$25 in credits is added when they make their first purchase",  color: "text-[#00d084]" },
                 { step: "04", title: "BUY MORE LEADS",     desc: "Use your credits to purchase premium leads on the marketplace", color: "text-[#fbbf24]" },
               ].map(s => (
                 <div key={s.step} className="flex items-start gap-3">
@@ -142,7 +142,7 @@ export default function Referrals() {
                 <span className="text-[9px] font-mono text-[#fbbf24] font-bold">NO LIMIT ON REFERRALS</span>
               </div>
               <p className="text-[9px] font-mono text-[#2a4060]">
-                Refer as many users as you want. Every verified signup earns you $25 in platform credits with no cap.
+                Refer as many users as you want. Every referred user who makes a first purchase earns you $25 in platform credits, with no cap.
               </p>
             </div>
           </div>
@@ -229,7 +229,7 @@ export default function Referrals() {
             <p className="text-[11px] font-mono font-bold text-[#a78bfa]">PRO TIP: Share in healthcare agent groups</p>
             <p className="text-[10px] font-mono text-[#3a5070] mt-0.5">
               Post your referral link in Facebook groups, WhatsApp threads, or LinkedIn posts targeting health insurance agents.
-              Each signup earns you $25 — 10 referrals = $250 in free lead credits.
+              Each referral who buys earns you $25 — 10 buying referrals = $250 in lead credits.
             </p>
           </div>
         </div>

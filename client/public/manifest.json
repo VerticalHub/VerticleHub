@@ -1,16 +1,13 @@
 {
-  "name": "LeadHealth — Healthcare Lead Intelligence Platform",
+  "name": "LeadHealth — Lead & Call Exchange",
   "short_name": "LeadHealth",
-  "description": "Buy, sell, and manage verified healthcare leads. ACA, Medicare, and Final Expense lead marketplace with AI-powered demand intelligence.",
+  "description": "Buy, sell, and manage verified ACA, Medicare, and Final Expense leads and calls.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#070d1a",
-  "theme_color": "#38bdf8",
+  "theme_color": "#070d1a",
   "icons": [
-    {
-      "src": "/favicon.ico",
-      "sizes": "64x64",
-      "type": "image/x-icon"
-    }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }

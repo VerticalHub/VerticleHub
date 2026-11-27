@@ -156,13 +156,14 @@ export default function Header() {
   useEffect(() => { setMobileOpen(false); }, [location]);
 
   const doubled = [...tickers, ...tickers];
+  const isAdmin = me?.role === "admin";
   const navItems = [
     { href: "/dashboard",   label: "DASHBOARD",      icon: LayoutDashboard },
-    { href: "/leads",       label: "LEADS",          icon: Activity        },
+    { href: "/leads",       label: isAdmin ? "LEADS" : "MY LEADS", icon: Activity },
     { href: "/marketplace", label: "MARKETPLACE",    icon: BarChart2       },
     { href: "/sell",        label: "SELL LEADS",     icon: Upload          },
     { href: "/referrals",   label: "REFERRALS",      icon: Gift            },
-    { href: "/admin",       label: "COMMAND CENTER", icon: Shield          },
+    ...(isAdmin ? [{ href: "/admin", label: "COMMAND CENTER", icon: Shield }] : []),
   ];
   const marketOpen = isMarketOpen();
   const displayAlerts = notifOpen ? allAlerts : unreadAlerts;
@@ -195,8 +196,8 @@ export default function Header() {
                   <Activity className="w-4 h-4 text-white" />
                 </div>
                 <div className="leading-none">
-                  <span className="text-[13px] font-bold font-mono text-white tracking-tight">HEALTHLEAD</span>
-                  <span className="text-[13px] font-bold font-mono text-[#0ea5e9] tracking-tight">PRO</span>
+                  <span className="text-[13px] font-bold font-mono text-white tracking-tight">LEAD</span>
+                  <span className="text-[13px] font-bold font-mono text-[#0ea5e9] tracking-tight">HEALTH</span>
                 </div>
               </div>
             </Link>

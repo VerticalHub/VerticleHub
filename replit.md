@@ -15,21 +15,52 @@ Healthcare lead generation, resale marketplace, and AI demand intelligence platf
 - bg: `#070d1a`, card: `#0d1526`, border: `#1e2d4a`, text: `#c8daf0`
 - green: `#00d084`, red: `#ff4d4d`, blue: `#38bdf8`, amber: `#fbbf24`, purple: `#a78bfa`
 
-## Demo Credentials
+## Demo Credentials (development only)
 
-- Admin: `admin` / `admin123`
-- Agent: `agent1` / `agent123`
+`SEED_DEMO_DATA=true` (set only for development in `.replit`) seeds `admin` and `agent1` with default passwords.
+Those default passwords are rejected at login when `NODE_ENV=production`. Set the `ADMIN_PASSWORD` secret
+(12+ characters) to set the admin password at startup.
+
+## Security notes
+
+- Every `/api` route except login/register, lead capture (`POST /api/leads`), credit packages, demand predictions,
+  market trends and price history requires a session. Admin data requires `role = admin`.
+- `POST /api/credits/purchase` is admin-only: there is no payment processor, so admins add credit after taking payment.
+- Referral bonuses are recorded as `pending` and paid when the referred user makes their first purchase.
+- Purchases debit credit and claim the listing with conditional updates, so concurrent requests can't overdraw or double-sell.
+- Production behind Replit's proxy needs `app.set("trust proxy", 1)` for secure session cookies.
+- Client routes are listed in `server/vite.ts` (`clientRoutes`) so unknown URLs return 404; keep it in sync with `client/src/App.tsx`.
+- Lead visibility (`GET /api/leads/:id`): admins see everything; a buyer sees the full lead with their own private
+  notes (`lead_purchases.buyer_notes`); anyone signed in sees a server-masked preview of a lead that is for sale.
+- Consumer opt-outs (`POST /api/opt-out`, public, rate-limited) mark matching leads DNC and pull their listings.
+  Admins see them in Command Center → OPT-OUTS.
+- `storage.ensureSchema()` runs at startup and adds columns/tables introduced later (idempotent). New tables must
+  also be declared in `shared/schema.ts`, because `db:push --force` (post-merge) drops tables it doesn't know.
+- `npm test` runs API access-control tests with an in-memory storage fake (no database needed).
+
+## Public pages and SEO
+
+- Public routes: `/` (landing), `/login`, `/privacy`, `/terms`, `/opt-out`. Everything else requires sign-in and is
+  served with `noindex`.
+- `server/seo.ts` injects each public page's title, description, canonical URL and a plain-HTML summary into
+  `index.html` in production. Keep it in step with the React pages in `client/src/pages/public/`.
+- `client/src/lib/site.ts` holds the support email and legal entity name shown on the legal pages; fill them in.
+- Pages are lazy-loaded per route (`client/src/App.tsx`); hashed assets are served with a one-year immutable cache.
+- Copy must describe what the code actually does. Don't add claims like "HIPAA compliant" or "verified" without
+  backing them up.
 
 ## Pages & Routes
 
 | Route | Page | Description |
 |---|---|---|
-| `/login` | Login | Sign in / register |
+| `/` | Landing | Public marketing page (signed-in users are redirected to /dashboard) |
+| `/login` | Login | Sign in / register (`?tab=register` opens registration) |
+| `/privacy`, `/terms`, `/opt-out` | Legal | Public privacy policy, terms, consumer opt-out form |
 | `/dashboard` | Dashboard | Post-login landing — KPI overview, pipeline charts, alerts, quick actions |
-| `/leads` | Leads | Pipeline funnel, analytics, CRM activity log, lead capture link |
+| `/leads` | Leads | Admin: pipeline, analytics, CRM. Agents: My Leads (purchased leads with contacts, CSV export) |
 | `/home` | Home | TCPA-compliant lead intake form |
 | `/marketplace` | Marketplace | Order book, watchlist, portfolio, AI signals |
-| `/admin` | Admin | Command center — overview, lead DB, listings, market data, users |
+| `/admin` | Admin | Command center (admin only) — overview, lead DB, listings, market data, users + add credit, opt-outs |
 | `/thank-you` | ThankYou | Post-submission confirmation |
 
 ## Key Features
@@ -84,12 +115,12 @@ Healthcare lead generation, resale marketplace, and AI demand intelligence platf
 - `DELETE /api/price-alerts/:id` — Delete alert
 
 ### Dashboard
-- `GET /api/dashboard?userId=1` — Aggregated summary
+- `GET /api/dashboard` — Aggregated summary for the signed-in user
 
 ### Credits
 - `GET /api/credits/:userId` — Account balance
 - `GET /api/credit-packages` — Available packages
-- `POST /api/credits/purchase` — Deposit
+- `POST /api/credits/purchase` — Add credit (admin only; body `{ userId, amount }`)
 
 ### Intelligence
 - `GET /api/demand-predictions` — AI demand forecasts

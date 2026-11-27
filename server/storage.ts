@@ -1,7 +1,7 @@
 import { 
   users, leads, creditAccounts, creditTransactions, creditPackages,
   leadListings, leadPurchases, leadQualityDecay, demandPredictions, marketTrends,
-  alerts, leadActivities, watchlist, priceAlerts, leadSubmissions, referrals,
+  alerts, leadActivities, watchlist, priceAlerts, leadSubmissions, referrals, optOutRequests,
   type User, type InsertUser, type Lead, type InsertLead,
   type CreditAccount, type InsertCreditAccount, type CreditTransaction, type InsertCreditTransaction,
   type CreditPackage, type InsertCreditPackage, type LeadListing, type InsertLeadListing,
@@ -45,7 +45,7 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  getAllUsers(): Promise<User[]>;
+  getAllUsers(): Promise<Pick<User, "id" | "username" | "email" | "role" | "createdAt">[]>;
 
   // Leads
   createLead(lead: InsertLead): Promise<Lead>;
@@ -76,6 +76,13 @@ export interface IStorage {
   getLeadPurchases(userId: number): Promise<LeadPurchase[]>;
   getLeadPurchasesDetailed(userId: number): Promise<PurchaseDetail[]>;
   hasPurchasedLead(userId: number, leadId: number): Promise<boolean>;
+  getPurchaseOfLead(userId: number, leadId: number): Promise<LeadPurchase | undefined>;
+  setBuyerNotes(purchaseId: number, notes: string): Promise<void>;
+  getPurchasedLeadsWithContacts(userId: number): Promise<Array<Lead & { purchaseId: number; pricePaid: string; purchaseDate: Date | null; buyerNotes: string | null }>>;
+  ensureSchema(): Promise<void>;
+  hasActiveListing(leadId: number): Promise<boolean>;
+  recordOptOut(phoneNumber: string | null, email: string | null): Promise<number>;
+  getOptOutRequests(limit?: number): Promise<Array<typeof optOutRequests.$inferSelect>>;
   updateLeadQuality(leadId: number, newQuality: number): Promise<void>;
   getLeadQuality(leadId: number): Promise<LeadQualityDecay | undefined>;
 
@@ -125,6 +132,13 @@ export interface IStorage {
   createReferral(ref: InsertReferral): Promise<Referral>;
   getReferralsByReferrer(referrerId: number): Promise<Referral[]>;
   getReferralCount(referrerId: number): Promise<number>;
+  updateUserPassword(id: number, passwordHash: string): Promise<void>;
+  claimPendingReferral(refereeId: number): Promise<Referral | undefined>;
+
+  // Atomic money/listing operations (prevent double-spend and double-sell)
+  debitIfSufficient(userId: number, amount: string): Promise<boolean>;
+  claimListing(listingId: number): Promise<boolean>;
+  releaseListing(listingId: number): Promise<void>;
 
   // Seller Submissions
   createSubmission(sub: InsertLeadSubmission): Promise<LeadSubmission>;
@@ -135,6 +149,9 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // ── Users ──────────────────────────────────────────────────────────────────
+  async updateUserPassword(id: number, passwordHash: string): Promise<void> {
+    await db.update(users).set({ password: passwordHash }).where(eq(users.id, id));
+  }
   async updateUserDisplayName(id: number, displayName: string) {
     const [updated] = await db
       .update(users)
@@ -346,6 +363,66 @@ export class DatabaseStorage implements IStorage {
     .where(eq(leadPurchases.buyerId, userId))
     .orderBy(desc(leadPurchases.purchaseDate));
     return rows as PurchaseDetail[];
+  }
+  async getPurchaseOfLead(userId: number, leadId: number): Promise<LeadPurchase | undefined> {
+    const [row] = await db.select({ p: leadPurchases })
+      .from(leadPurchases)
+      .innerJoin(leadListings, eq(leadPurchases.listingId, leadListings.id))
+      .where(and(eq(leadPurchases.buyerId, userId), eq(leadListings.leadId, leadId)))
+      .limit(1);
+    return row?.p;
+  }
+  async hasActiveListing(leadId: number): Promise<boolean> {
+    const rows = await db.select({ id: leadListings.id }).from(leadListings)
+      .where(and(eq(leadListings.leadId, leadId), eq(leadListings.isActive, true))).limit(1);
+    return rows.length > 0;
+  }
+  async setBuyerNotes(purchaseId: number, notes: string): Promise<void> {
+    await db.update(leadPurchases).set({ buyerNotes: notes }).where(eq(leadPurchases.id, purchaseId));
+  }
+  async getPurchasedLeadsWithContacts(userId: number) {
+    const rows = await db.select({ lead: leads, purchaseId: leadPurchases.id, pricePaid: leadPurchases.price, purchaseDate: leadPurchases.purchaseDate, buyerNotes: leadPurchases.buyerNotes })
+      .from(leadPurchases)
+      .innerJoin(leadListings, eq(leadPurchases.listingId, leadListings.id))
+      .innerJoin(leads, eq(leadListings.leadId, leads.id))
+      .where(eq(leadPurchases.buyerId, userId))
+      .orderBy(desc(leadPurchases.purchaseDate));
+    return rows.map(r => ({ ...r.lead, notes: null, purchaseId: r.purchaseId, pricePaid: r.pricePaid, purchaseDate: r.purchaseDate, buyerNotes: r.buyerNotes }));
+  }
+  // Marks every lead matching the phone or email as DNC; returns how many matched.
+  async recordOptOut(phoneNumber: string | null, email: string | null): Promise<number> {
+    const conds = [];
+    if (phoneNumber) conds.push(eq(leads.phoneNumber, phoneNumber));
+    if (email) conds.push(sql`lower(${leads.email}) = ${email.toLowerCase()}`);
+    let matched = 0;
+    if (conds.length) {
+      const rows = await db.update(leads)
+        .set({ dnc: true, dncAddedAt: new Date(), status: "archived" })
+        .where(or(...conds))
+        .returning({ id: leads.id });
+      matched = rows.length;
+      // Pull any active listings for those leads off the market.
+      for (const r of rows) {
+        await db.update(leadListings).set({ isActive: false }).where(eq(leadListings.leadId, r.id));
+      }
+    }
+    await db.insert(optOutRequests).values({ phoneNumber, email, matchedLeads: matched });
+    return matched;
+  }
+  async getOptOutRequests(limit = 100) {
+    return db.select().from(optOutRequests).orderBy(desc(optOutRequests.createdAt)).limit(limit);
+  }
+  // Idempotent additions for columns introduced after the first deploy, so the
+  // app works even if `db:push` hasn't run against the production database.
+  async ensureSchema(): Promise<void> {
+    await db.execute(sql`ALTER TABLE lead_purchases ADD COLUMN IF NOT EXISTS buyer_notes text`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS opt_out_requests (
+      id serial PRIMARY KEY,
+      phone_number text,
+      email text,
+      matched_leads integer NOT NULL DEFAULT 0,
+      created_at timestamp DEFAULT now()
+    )`);
   }
   async hasPurchasedLead(userId: number, leadId: number): Promise<boolean> {
     const rows = await db.select({ id: leadPurchases.id })
@@ -561,6 +638,33 @@ export class DatabaseStorage implements IStorage {
   async getReferralCount(referrerId: number): Promise<number> {
     const rows = await db.select().from(referrals).where(eq(referrals.referrerId, referrerId));
     return rows.length;
+  }
+  // Flips the referee's pending referral to completed exactly once; returns it if this call won.
+  async claimPendingReferral(refereeId: number): Promise<Referral | undefined> {
+    const [row] = await db.update(referrals)
+      .set({ status: "completed" })
+      .where(and(eq(referrals.refereeId, refereeId), eq(referrals.status, "pending")))
+      .returning();
+    return row;
+  }
+
+  // ── Atomic money/listing operations ───────────────────────────────────────
+  async debitIfSufficient(userId: number, amount: string): Promise<boolean> {
+    const rows = await db.update(creditAccounts)
+      .set({ balance: sql`${creditAccounts.balance} - ${amount}`, updatedAt: new Date() })
+      .where(and(eq(creditAccounts.userId, userId), gte(creditAccounts.balance, amount)))
+      .returning({ id: creditAccounts.id });
+    return rows.length > 0;
+  }
+  async claimListing(listingId: number): Promise<boolean> {
+    const rows = await db.update(leadListings)
+      .set({ isActive: false })
+      .where(and(eq(leadListings.id, listingId), eq(leadListings.isActive, true)))
+      .returning({ id: leadListings.id });
+    return rows.length > 0;
+  }
+  async releaseListing(listingId: number): Promise<void> {
+    await db.update(leadListings).set({ isActive: true }).where(eq(leadListings.id, listingId));
   }
 
   // ── Seller Submissions ────────────────────────────────────────────────────

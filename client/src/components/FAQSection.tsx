@@ -24,7 +24,7 @@ export default function FAQSection() {
     },
     {
       question: "Is my information secure?",
-      answer: "Yes, we take data security very seriously. Our platform is HIPAA compliant and uses 256-bit encryption to protect your personal information. We adhere to strict privacy policies and never sell your data to unauthorized third parties. Your information is only shared with the insurance providers you're matched with to provide you with accurate quotes."
+      answer: "Your information is sent over an encrypted connection and stored in an access-controlled system. To connect you with help, your information may be shared with or sold to licensed insurance agents and agencies, who may contact you about the coverage you asked about. You can ask us to stop contacting you at any time on our opt-out page, and our Privacy Policy explains your choices."
     },
     {
       question: "How quickly will I receive quotes?",

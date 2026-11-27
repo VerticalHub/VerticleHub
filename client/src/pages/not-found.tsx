@@ -7,7 +7,7 @@ export default function NotFound() {
   return (
     <>
       <Helmet>
-        <title>404 — Route Not Found | HealthLead Pro</title>
+        <title>404 — Page Not Found | LeadHealth</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       <Header />
@@ -63,7 +63,7 @@ export default function NotFound() {
 
               <div className="text-[9px] font-mono text-[#1e2d4a] space-y-0.5">
                 <p>ERR: PATH_RESOLUTION_FAILED</p>
-                <p>CODE: 404 · PLATFORM: HEALTHLEAD_PRO</p>
+                <p>CODE: 404 · PLATFORM: LEADHEALTH</p>
               </div>
             </div>
           </div>

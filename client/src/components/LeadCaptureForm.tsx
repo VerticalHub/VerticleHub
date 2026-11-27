@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, apiErrorMessage } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useStates } from "@/hooks/use-states";
@@ -41,7 +41,9 @@ export default function LeadCaptureForm() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [showAcaWarning, setShowAcaWarning] = useState(false);
   const [showMedicareWarning, setShowMedicareWarning] = useState(false);
-  
+  const [consent, setConsent] = useState(false);
+  const [consentError, setConsentError] = useState(false);
+
   const form = useForm<LeadFormData>({
     resolver: zodResolver(leadValidationSchema),
     defaultValues: {
@@ -69,7 +71,7 @@ export default function LeadCaptureForm() {
     onError: (error) => {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to submit your information. Please try again.",
+        description: apiErrorMessage(error, "Failed to submit your information. Please try again."),
         variant: "destructive",
       });
     },
@@ -78,7 +80,7 @@ export default function LeadCaptureForm() {
   const onSubmit = (data: LeadFormData) => {
     // Ensure interests are submitted correctly
     data.interests = selectedInterests;
-    
+
     if (data.interests.length === 0) {
       toast({
         title: "Form Error",
@@ -88,7 +90,13 @@ export default function LeadCaptureForm() {
       return;
     }
 
-    leadMutation.mutate(data);
+    if (!consent) {
+      setConsentError(true);
+      return;
+    }
+
+    // Record the consumer's consent with the lead.
+    leadMutation.mutate({ ...data, tcpaConsent: true, tcpaConsentSource: "web_form" });
   };
 
   // Watch for Medicare interest and date of birth to show warnings
@@ -100,11 +108,11 @@ export default function LeadCaptureForm() {
       const today = new Date();
       let age = today.getFullYear() - dob.getFullYear();
       const monthDiff = today.getMonth() - dob.getMonth();
-      
+
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
         age--;
       }
-      
+
       // Check if they're at least 64.5 years old
       if (age < 64 || (age === 64 && monthDiff < 6)) {
         setShowMedicareWarning(true);
@@ -114,7 +122,7 @@ export default function LeadCaptureForm() {
     } else {
       setShowMedicareWarning(false);
     }
-    
+
     // Check if user wants ACA but has Medicare/Medicaid/VA
     const hasCoverage = form.getValues("hasMedicaidMedicareVA");
     if (selectedInterests.includes("ACA/Obamacare") && hasCoverage) {
@@ -125,13 +133,13 @@ export default function LeadCaptureForm() {
   }, [selectedInterests, form.watch("dateOfBirth"), form.watch("hasMedicaidMedicareVA"), form]);
 
   const handleInterestChange = (interest: string, checked: boolean) => {
-    const newInterests = checked 
+    const newInterests = checked
       ? [...selectedInterests, interest]
       : selectedInterests.filter(i => i !== interest);
-    
+
     setSelectedInterests(newInterests);
     form.setValue('interests', newInterests);
-    
+
     // Force re-validation
     form.trigger('interests');
   };
@@ -148,16 +156,16 @@ export default function LeadCaptureForm() {
                 <FormItem>
                   <FormLabel>First Name</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="John" 
-                      {...field} 
+                    <Input
+                      placeholder="John"
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="lastName"
@@ -165,16 +173,16 @@ export default function LeadCaptureForm() {
                 <FormItem>
                   <FormLabel>Last Name</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="Doe" 
-                      {...field} 
+                    <Input
+                      placeholder="Doe"
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="phoneNumber"
@@ -182,17 +190,17 @@ export default function LeadCaptureForm() {
                 <FormItem>
                   <FormLabel>Phone Number</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="(123) 456-7890" 
+                    <Input
+                      placeholder="(123) 456-7890"
                       type="tel"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="email"
@@ -200,17 +208,17 @@ export default function LeadCaptureForm() {
                 <FormItem>
                   <FormLabel>Email Address</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="your@email.com" 
+                    <Input
+                      placeholder="your@email.com"
                       type="email"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="zipCode"
@@ -218,25 +226,25 @@ export default function LeadCaptureForm() {
                 <FormItem>
                   <FormLabel>Zip Code</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="12345" 
+                    <Input
+                      placeholder="12345"
                       maxLength={5}
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="state"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>State</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
+                  <Select
+                    onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
                     <FormControl>
@@ -321,7 +329,7 @@ export default function LeadCaptureForm() {
               )}
             />
           </div>
-          
+
           <FormField
             control={form.control}
             name="interests"
@@ -333,45 +341,45 @@ export default function LeadCaptureForm() {
                   </FormLabel>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="flex items-center">
-                      <Checkbox 
-                        id="interest_aca" 
+                      <Checkbox
+                        id="interest_aca"
                         checked={selectedInterests.includes("ACA/Obamacare")}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           handleInterestChange("ACA/Obamacare", checked as boolean)
                         }
                       />
-                      <label 
-                        htmlFor="interest_aca" 
+                      <label
+                        htmlFor="interest_aca"
                         className="ml-2 text-gray-700 cursor-pointer"
                       >
                         ACA/Obamacare
                       </label>
                     </div>
                     <div className="flex items-center">
-                      <Checkbox 
-                        id="interest_medicare" 
+                      <Checkbox
+                        id="interest_medicare"
                         checked={selectedInterests.includes("Medicare")}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           handleInterestChange("Medicare", checked as boolean)
                         }
                       />
-                      <label 
-                        htmlFor="interest_medicare" 
+                      <label
+                        htmlFor="interest_medicare"
                         className="ml-2 text-gray-700 cursor-pointer"
                       >
                         Medicare
                       </label>
                     </div>
                     <div className="flex items-center">
-                      <Checkbox 
-                        id="interest_final_expense" 
+                      <Checkbox
+                        id="interest_final_expense"
                         checked={selectedInterests.includes("Final Expense/Life Insurance")}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           handleInterestChange("Final Expense/Life Insurance", checked as boolean)
                         }
                       />
-                      <label 
-                        htmlFor="interest_final_expense" 
+                      <label
+                        htmlFor="interest_final_expense"
                         className="ml-2 text-gray-700 cursor-pointer"
                       >
                         Final Expense/Life
@@ -383,7 +391,7 @@ export default function LeadCaptureForm() {
                       Select at least one interest
                     </p>
                   )}
-                  
+
                   {showAcaWarning && (
                     <Alert variant="destructive" className="mt-4">
                       <AlertCircle className="h-4 w-4" />
@@ -393,7 +401,7 @@ export default function LeadCaptureForm() {
                       </AlertDescription>
                     </Alert>
                   )}
-                  
+
                   {showMedicareWarning && (
                     <Alert variant="destructive" className="mt-4">
                       <AlertCircle className="h-4 w-4" />
@@ -407,23 +415,33 @@ export default function LeadCaptureForm() {
               </FormItem>
             )}
           />
-          
+
           <div className="mb-6">
             <div className="flex items-start">
-              <Checkbox 
-                id="privacy_consent" 
-                required
+              <Checkbox
+                id="privacy_consent"
+                checked={consent}
+                onCheckedChange={v => { setConsent(v === true); if (v === true) setConsentError(false); }}
+                aria-invalid={consentError}
+                aria-describedby={consentError ? "consent-error" : undefined}
               />
               <label htmlFor="privacy_consent" className="ml-2 text-sm text-gray-600">
-                I consent to receive phone calls, text messages, and emails about insurance products. 
-                I understand my information will be used in accordance with your <a href="#" className="text-primary-600 hover:underline">Privacy Policy</a>. 
-                I can opt-out at any time.
+                By checking this box, I agree that LeadHealth and the licensed insurance agents and agencies that receive or
+                buy my information may contact me about health insurance at the phone number and email I provided, including by
+                calls and text messages that use automated technology or prerecorded voices, even if my number is on a Do Not Call list.
+                Consent is not a condition of purchase. Message and data rates may apply. I can opt out at any time. See the{" "}
+                <a href="/privacy" target="_blank" rel="noopener" className="text-primary-600 hover:underline">Privacy Policy</a>.
               </label>
             </div>
+            {consentError && (
+              <p id="consent-error" role="alert" className="text-sm font-medium text-destructive mt-2">
+                Please check the box to agree to be contacted.
+              </p>
+            )}
           </div>
-          
-          <Button 
-            type="submit" 
+
+          <Button
+            type="submit"
             className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-6 px-6 rounded-md shadow-md transition transform hover:-translate-y-1"
             disabled={leadMutation.isPending}
           >
@@ -436,18 +454,19 @@ export default function LeadCaptureForm() {
               "Check My Eligibility For Health Insurance"
             )}
           </Button>
-          
+
           <div className="mt-4 text-xs text-gray-600 space-y-2">
             <p className="text-center">
-              HIPAA Compliant • 256-bit Encryption • We never sell your personal data
+              Encrypted connection • Your information may be shared with or sold to licensed agents who can help you •{" "}
+              <a href="/opt-out" target="_blank" rel="noopener" className="underline">Opt out anytime</a>
             </p>
             <p className="text-center">
-              Note: Eligibility for health insurance plans depends on various factors. You may qualify for 
-              reduced premiums through subsidies or tax credits if eligible. There is no guarantee 
+              Note: Eligibility for health insurance plans depends on various factors. You may qualify for
+              reduced premiums through subsidies or tax credits if eligible. There is no guarantee
               of coverage until your application is processed.
             </p>
             <p className="text-center">
-              If you currently have Medicare, Medicaid, TriCare or Employer coverage, 
+              If you currently have Medicare, Medicaid, TriCare or Employer coverage,
               you may not qualify for ACA/Obamacare plans.
             </p>
           </div>
